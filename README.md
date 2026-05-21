@@ -22,7 +22,7 @@ Pre-alpha. The live gap list lives in [`docs/alpha-limitations.md`](docs/alpha-l
 - Windows — system tray app
 - Linux — app-indicator app where supported; falls back to dashboard window plus desktop notifications on stock GNOME and some Wayland sessions
 
-The lead alpha validation platform, once selected, is recorded in [`docs/alpha-limitations.md`](docs/alpha-limitations.md).
+The alpha is being validated on **Linux** first (Ubuntu 24.04 LTS, Fedora 41+, KDE Plasma 6), with macOS and Windows parity required by beta. Live parity status lives in [`docs/alpha-limitations.md`](docs/alpha-limitations.md).
 
 ## Quick start
 

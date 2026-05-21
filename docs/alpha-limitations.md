@@ -6,12 +6,12 @@ This document tracks what does and does not work in the current alpha build. It 
 
 ## Lead platform and parity
 
-The alpha may ship on a single lead validation platform (macOS or Linux) with the other platforms continuing to build in CI. Full macOS, Windows, and Linux parity is required by beta.
+The alpha is validated against a single lead platform with the other platforms continuing to build in CI. Full macOS, Windows, and Linux parity is required by beta.
 
-- Lead platform for this build: _TBD (set when step 3 of the build plan is complete)._
-- macOS parity: _TBD_
-- Windows parity: _TBD_
-- Linux parity: _TBD_
+- **Lead platform:** Linux (Ubuntu 24.04 LTS, Fedora 41+, KDE Plasma 6). Daily-driver validation target during the alpha.
+- **macOS parity:** required by beta. Must compile and pass CI tests throughout the alpha.
+- **Windows parity:** required by beta. Must compile and pass CI tests throughout the alpha.
+- **Linux distro coverage outside the primary targets:** best-effort. Users on stock GNOME may need the AppIndicator extension to see a tray icon; the dashboard-plus-notifications fallback works without it.
 
 ## Adapters
 
