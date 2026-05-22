@@ -10,7 +10,7 @@ checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
 name = "agentdeck-adapter"
-version = "0.0.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "agentdeck-process",
  "chrono",
@@ -20,7 +20,7 @@ dependencies = [
 
 [[package]]
 name = "agentdeck-adapter-aider"
-version = "0.0.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "agentdeck-adapter",
  "agentdeck-core",
@@ -30,7 +30,7 @@ dependencies = [
 
 [[package]]
 name = "agentdeck-adapter-claude-code"
-version = "0.0.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "agentdeck-adapter",
  "agentdeck-core",
@@ -40,7 +40,7 @@ dependencies = [
 
 [[package]]
 name = "agentdeck-adapter-codex"
-version = "0.0.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "agentdeck-adapter",
  "agentdeck-core",
@@ -50,7 +50,7 @@ dependencies = [
 
 [[package]]
 name = "agentdeck-adapter-custom"
-version = "0.0.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "agentdeck-adapter",
  "agentdeck-core",
@@ -68,7 +68,7 @@ dependencies = [
 
 [[package]]
 name = "agentdeck-app"
-version = "0.0.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "agentdeck-adapter",
  "agentdeck-adapter-aider",
@@ -103,7 +103,7 @@ dependencies = [
 
 [[package]]
 name = "agentdeck-attention"
-version = "0.0.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "agentdeck-adapter",
  "agentdeck-core",
@@ -121,7 +121,7 @@ dependencies = [
 
 [[package]]
 name = "agentdeck-core"
-version = "0.0.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "chrono",
  "serde",
@@ -130,7 +130,7 @@ dependencies = [
 
 [[package]]
 name = "agentdeck-diagnostics"
-version = "0.0.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "agentdeck-adapter",
  "agentdeck-process",
@@ -146,7 +146,7 @@ dependencies = [
 
 [[package]]
 name = "agentdeck-export"
-version = "0.0.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "agentdeck-adapter",
  "agentdeck-session",
@@ -161,7 +161,7 @@ dependencies = [
 
 [[package]]
 name = "agentdeck-harness"
-version = "0.0.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "agentdeck-core",
  "anyhow",
@@ -176,7 +176,7 @@ dependencies = [
 
 [[package]]
 name = "agentdeck-process"
-version = "0.0.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "agentdeck-core",
  "chrono",
@@ -189,7 +189,7 @@ dependencies = [
 
 [[package]]
 name = "agentdeck-session"
-version = "0.0.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "agentdeck-adapter",
  "agentdeck-core",
@@ -205,7 +205,7 @@ dependencies = [
 
 [[package]]
 name = "agentdeck-storage"
-version = "0.0.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "chrono",
  "dirs",
@@ -221,7 +221,7 @@ dependencies = [
 
 [[package]]
 name = "agentdeck-tags"
-version = "0.0.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "agentdeck-storage",
  "chrono",
@@ -233,7 +233,7 @@ dependencies = [
 
 [[package]]
 name = "agentdeck-telegram"
-version = "0.0.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "agentdeck-adapter",
  "agentdeck-attention",

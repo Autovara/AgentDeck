@@ -1,7 +1,7 @@
 {
   "name": "agentdeck",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0-alpha.1",
   "description": "Local-first attention board and safe Telegram remote control for AI coding agents.",
   "license": "MIT",
   "type": "module",
