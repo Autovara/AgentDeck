@@ -168,6 +168,56 @@ a {
   cursor: not-allowed;
 }
 
+.custom-adapter-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.custom-adapter-form__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.custom-adapter-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+
+.custom-adapter-form input,
+.custom-adapter-form select {
+  font: inherit;
+  font-size: 13px;
+  font-family: var(--mono);
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.custom-adapter-form input:focus,
+.custom-adapter-form select:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+  border-color: var(--accent);
+}
+
+.custom-adapter-form__pattern {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.custom-adapter-form__actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .card__diagnostic {
   margin-top: 8px;
   font-family: var(--mono);

@@ -7,7 +7,7 @@
 //! schema and migration path on every cold start.
 
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use agentdeck_storage::{
     default_db_path, MigrationSummary, Storage, StorageDiagnostics, StorageError, TableStat,
@@ -59,7 +59,7 @@ pub struct StorageReportState {
 }
 
 struct StorageReportInner {
-    storage: Option<Storage>,
+    storage: Option<Arc<Storage>>,
     last_report: StorageReport,
 }
 
@@ -73,6 +73,19 @@ impl StorageReportState {
         }
     }
 
+    /// Clone the shared storage handle, if the database opened successfully.
+    /// Other Tauri-managed state (e.g. the custom adapter state) hold their
+    /// own clone of the same `Arc<Storage>`. Currently unused in the shell
+    /// (the Arc is wired in at setup time), kept as a stable accessor for
+    /// future Tauri commands and tests.
+    #[allow(dead_code)]
+    pub fn storage(&self) -> Option<Arc<Storage>> {
+        self.inner
+            .lock()
+            .ok()
+            .and_then(|g| g.storage.as_ref().cloned())
+    }
+
     /// Return the most recent report. If the storage handle is alive we
     /// refresh it first; otherwise we return the cached (probably failed)
     /// startup snapshot.
@@ -82,7 +95,7 @@ impl StorageReportState {
             Err(poisoned) => poisoned.into_inner(),
         };
 
-        if let Some(storage) = &guard.storage {
+        if let Some(storage) = guard.storage.clone() {
             match storage.diagnostics() {
                 Ok(diag) => {
                     guard.last_report = report_from_diagnostics(diag);
@@ -101,7 +114,7 @@ impl StorageReportState {
 /// Returned by [`initialise`]; carries both the handle (kept alive for the
 /// lifetime of the app) and the initial diagnostic snapshot.
 pub struct StorageReportWithHandle {
-    pub storage: Option<Storage>,
+    pub storage: Option<Arc<Storage>>,
     pub report: StorageReport,
 }
 
@@ -122,27 +135,30 @@ pub fn initialise<R: Runtime>(_app: &AppHandle<R>) -> StorageReportWithHandle {
     tracing::info!(path = %path.display(), "Opening AgentDeck SQLite database");
 
     match Storage::open(&path) {
-        Ok(storage) => match storage.diagnostics() {
-            Ok(diag) => {
-                tracing::info!(
-                    schema = diag.schema_version,
-                    journal_mode = diag.journal_mode.as_str(),
-                    size_bytes = ?diag.size_bytes,
-                    "Storage initialised successfully",
-                );
-                StorageReportWithHandle {
-                    storage: Some(storage),
-                    report: report_from_diagnostics(diag),
+        Ok(storage) => {
+            let storage = Arc::new(storage);
+            match storage.diagnostics() {
+                Ok(diag) => {
+                    tracing::info!(
+                        schema = diag.schema_version,
+                        journal_mode = diag.journal_mode.as_str(),
+                        size_bytes = ?diag.size_bytes,
+                        "Storage initialised successfully",
+                    );
+                    StorageReportWithHandle {
+                        storage: Some(storage),
+                        report: report_from_diagnostics(diag),
+                    }
+                }
+                Err(err) => {
+                    tracing::error!(error = %err, "Storage diagnostics failed after open");
+                    StorageReportWithHandle {
+                        storage: Some(storage),
+                        report: failure_report(path, err),
+                    }
                 }
             }
-            Err(err) => {
-                tracing::error!(error = %err, "Storage diagnostics failed after open");
-                StorageReportWithHandle {
-                    storage: Some(storage),
-                    report: failure_report(path, err),
-                }
-            }
-        },
+        }
         Err(err) => {
             tracing::error!(error = %err, path = %path.display(), "Storage open failed");
             StorageReportWithHandle {

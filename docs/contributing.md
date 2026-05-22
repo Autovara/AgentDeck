@@ -20,7 +20,8 @@ Workspace layout:
 - `crates/agentdeck-harness` — dev-time replay harness library and CLI
 - `crates/agentdeck-process` — `SysinfoProcessSource` and the `ProcessScanner` (snapshot + diff over any `ProcessSource`)
 - `crates/agentdeck-storage` — SQLite schema, migrations, and the `Storage` handle the monitor core uses
-- `src-tauri/` — Tauri application shell, tray detection, storage bootstrap, process scanner wiring, and the Tauri commands consumed by the dashboard
+- `crates/agentdeck-adapter-custom` — user-defined Level 1 process matcher (definitions, validation, persistence, and matcher)
+- `src-tauri/` — Tauri application shell, tray detection, storage bootstrap, process scanner wiring, custom-adapter wiring, and the Tauri commands consumed by the dashboard
 - `src/` — React 19 + TypeScript dashboard rendered inside the Tauri webview
 - `fixtures/sessions/` — recorded harness fixtures
 
@@ -101,6 +102,22 @@ To reset a development database, delete the file (and the `.db-wal`, `.db-shm` s
 The Tauri shell currently invokes the scanner on demand from the `get_process_scanner_report` command (rendered as the "Process scanner" card on the dashboard). Once the monitor core lands, that command will read a cached snapshot maintained by a background tick loop instead of calling sysinfo synchronously.
 
 The scanner also exposes a lightweight `extract_candidates` helper that surfaces processes whose name or command line contains an alpha agent pattern (`aider`, `codex`, `claude`, `ollama`, `agent`). This is **not** the adapter framework — it exists so the diagnostics card can preview what adapters might see. Adapters will replace it with richer matching (exe path, parent process, file watchers, version probes).
+
+### Custom adapters
+
+`crates/agentdeck-adapter-custom` is the first concrete adapter. It persists user-defined matchers in the `custom_adapters` SQLite table (see migration `0002_custom_adapters.sql`) and, given a `ProcessSnapshot`, returns every process that matches each enabled adapter.
+
+Each definition has a label, an agent name, an enabled flag, an optional colour, an optional notes field, an optional `cost_per_hour_cents` for coarse cost reporting, and one of three match kinds:
+
+- `name` — Rust regex against the process name.
+- `cmdline` — Rust regex against the joined command line (single-space separator).
+- `cwd` — Rust regex against the process's current working directory. Processes without a `cwd` never match.
+
+Custom adapters are deliberately locked to capability **Level 1** (presence detection only). Status, usage, and `/stop` are out of scope; the higher capability levels belong to the native adapters that follow in later build-plan steps.
+
+The "Custom adapters" card on the dashboard exposes list / add / delete / enable / disable. Add and delete flow through the `add_custom_adapter`, `delete_custom_adapter`, and `set_custom_adapter_enabled` Tauri commands; all four also re-run the matcher so the card shows current PID matches without a second round trip.
+
+To delete every definition during development, drop the database (see "Local SQLite storage" above) or open it with any SQLite tool and `DELETE FROM custom_adapters;`.
 
 ## Code of conduct
 

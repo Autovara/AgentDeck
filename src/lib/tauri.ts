@@ -145,3 +145,76 @@ export interface ProcessInfo {
 export async function getProcessScannerReport(): Promise<ProcessScannerReport> {
   return invoke<ProcessScannerReport>("get_process_scanner_report");
 }
+
+/**
+ * One user-defined custom adapter plus the PIDs that matched in the latest
+ * snapshot. Mirrors the `CustomAdapterSummary` struct in
+ * `src-tauri/src/custom_adapter.rs`.
+ */
+export interface CustomAdapterSummary {
+  id: string;
+  label: string;
+  agentName: string;
+  enabled: boolean;
+  color: string | null;
+  matchKind: CustomAdapterMatchKind;
+  pattern: string;
+  costPerHourCents: number | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+  matchedPids: number[];
+  regexCompileError: string | null;
+}
+
+export type CustomAdapterMatchKind = "name" | "cmdline" | "cwd";
+
+/**
+ * Diagnostic snapshot of the custom-adapter registry. Mirrors
+ * `CustomAdapterReport`.
+ */
+export interface CustomAdapterReport {
+  ready: boolean;
+  adapters: CustomAdapterSummary[];
+  lastMatchRan: boolean;
+  capturedAt: string;
+  error: string | null;
+}
+
+/** Input shape for `add_custom_adapter`, matched by Rust serde. */
+export interface NewCustomAdapter {
+  label: string;
+  agentName: string;
+  matchKind: CustomAdapterMatchKind;
+  pattern: string;
+  enabled?: boolean;
+  color?: string | null;
+  costPerHourCents?: number | null;
+  notes?: string | null;
+}
+
+export async function getCustomAdapterReport(): Promise<CustomAdapterReport> {
+  return invoke<CustomAdapterReport>("get_custom_adapter_report");
+}
+
+export async function addCustomAdapter(
+  input: NewCustomAdapter,
+): Promise<CustomAdapterReport> {
+  return invoke<CustomAdapterReport>("add_custom_adapter", { input });
+}
+
+export async function deleteCustomAdapter(
+  id: string,
+): Promise<CustomAdapterReport> {
+  return invoke<CustomAdapterReport>("delete_custom_adapter", { id });
+}
+
+export async function setCustomAdapterEnabled(
+  id: string,
+  enabled: boolean,
+): Promise<CustomAdapterReport> {
+  return invoke<CustomAdapterReport>("set_custom_adapter_enabled", {
+    id,
+    enabled,
+  });
+}

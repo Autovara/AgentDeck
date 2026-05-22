@@ -12,13 +12,17 @@
 //! will own all state. This shell simply wires the UI surface to the core
 //! through Tauri commands and events.
 
+mod custom_adapter;
 mod process_scanner;
 mod storage;
 mod tray;
 
+use agentdeck_adapter_custom::NewCustomAdapter;
 use tauri::Manager;
 use tray::{TraySurfaceReport, TraySurfaceState};
+use uuid::Uuid;
 
+use crate::custom_adapter::{CustomAdapterReport, CustomAdapterState};
 use crate::process_scanner::{ProcessScannerReport, ProcessScannerState};
 use crate::storage::{StorageReport, StorageReportState};
 
@@ -41,14 +45,20 @@ fn build_app() -> tauri::Builder<tauri::Wry> {
             get_tray_surface,
             get_storage_report,
             get_process_scanner_report,
+            get_custom_adapter_report,
+            add_custom_adapter,
+            delete_custom_adapter,
+            set_custom_adapter_enabled,
         ])
         .setup(|app| {
             let handle = app.handle().clone();
 
             let storage_report = storage::initialise(&handle);
+            let storage_handle = storage_report.storage.clone();
             app.manage(StorageReportState::new(storage_report));
 
             app.manage(ProcessScannerState::new());
+            app.manage(CustomAdapterState::new(storage_handle));
 
             let report = tray::probe(&handle);
 
@@ -114,6 +124,44 @@ fn get_process_scanner_report(
     state: tauri::State<'_, ProcessScannerState>,
 ) -> ProcessScannerReport {
     state.refresh()
+}
+
+#[tauri::command]
+fn get_custom_adapter_report(
+    state: tauri::State<'_, CustomAdapterState>,
+    scanner: tauri::State<'_, ProcessScannerState>,
+) -> CustomAdapterReport {
+    state.refresh(&scanner)
+}
+
+#[tauri::command]
+fn add_custom_adapter(
+    input: NewCustomAdapter,
+    state: tauri::State<'_, CustomAdapterState>,
+    scanner: tauri::State<'_, ProcessScannerState>,
+) -> Result<CustomAdapterReport, String> {
+    state.add(input, &scanner)
+}
+
+#[tauri::command]
+fn delete_custom_adapter(
+    id: String,
+    state: tauri::State<'_, CustomAdapterState>,
+    scanner: tauri::State<'_, ProcessScannerState>,
+) -> Result<CustomAdapterReport, String> {
+    let uuid = Uuid::parse_str(&id).map_err(|e| format!("invalid uuid {id:?}: {e}"))?;
+    state.delete(uuid, &scanner)
+}
+
+#[tauri::command]
+fn set_custom_adapter_enabled(
+    id: String,
+    enabled: bool,
+    state: tauri::State<'_, CustomAdapterState>,
+    scanner: tauri::State<'_, ProcessScannerState>,
+) -> Result<CustomAdapterReport, String> {
+    let uuid = Uuid::parse_str(&id).map_err(|e| format!("invalid uuid {id:?}: {e}"))?;
+    state.set_enabled(uuid, enabled, &scanner)
 }
 
 fn init_tracing() {

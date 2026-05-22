@@ -50,4 +50,5 @@ pub(crate) const KNOWN_TABLES: &[&str] = &[
     "remote_commands",
     "audit_log",
     "settings",
+    "custom_adapters",
 ];

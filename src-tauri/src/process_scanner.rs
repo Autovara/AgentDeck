@@ -61,6 +61,15 @@ impl ProcessScannerState {
         }
     }
 
+    /// Take a snapshot for use by other state (e.g. the custom adapter
+    /// matcher) without updating the cached scanner report. Callers that
+    /// surface their own diagnostics use this so they do not race with the
+    /// `get_process_scanner_report` command.
+    pub fn scan_once_for_matching(&self) -> ProcessSnapshot {
+        let scanner = self.scanner.clone();
+        scanner.scan_once()
+    }
+
     /// Run a scan, refresh the cached report, and return it.
     pub fn refresh(&self) -> ProcessScannerReport {
         let scanner = self.scanner.clone();

@@ -9,9 +9,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
+name = "agentdeck-adapter-custom"
+version = "0.0.0"
+dependencies = [
+ "agentdeck-core",
+ "agentdeck-process",
+ "agentdeck-storage",
+ "chrono",
+ "regex",
+ "rusqlite",
+ "serde",
+ "tempfile",
+ "thiserror 1.0.69",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "agentdeck-app"
 version = "0.0.0"
 dependencies = [
+ "agentdeck-adapter-custom",
  "agentdeck-core",
  "agentdeck-process",
  "agentdeck-storage",
@@ -28,6 +46,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "uuid",
  "zbus",
 ]
 

@@ -1,11 +1,17 @@
 import { useCallback, useEffect, useState } from "react";
 import type { JSX } from "react";
 import {
+  addCustomAdapter,
+  deleteCustomAdapter,
+  getCustomAdapterReport,
   getProcessScannerReport,
   getStorageReport,
   getTraySurface,
+  setCustomAdapterEnabled,
 } from "./lib/tauri";
 import type {
+  CustomAdapterReport,
+  NewCustomAdapter,
   ProcessScannerReport,
   StorageReport,
   TraySurfaceReport,
@@ -13,6 +19,7 @@ import type {
 import { TraySurfaceCard } from "./components/TraySurfaceCard";
 import { StorageCard } from "./components/StorageCard";
 import { ProcessScannerCard } from "./components/ProcessScannerCard";
+import { CustomAdaptersCard } from "./components/CustomAdaptersCard";
 
 type AsyncState<T> =
   | { kind: "loading" }
@@ -30,6 +37,10 @@ export function App(): JSX.Element {
     kind: "loading",
   });
   const [rescanning, setRescanning] = useState(false);
+  const [custom, setCustom] = useState<AsyncState<CustomAdapterReport>>({
+    kind: "loading",
+  });
+  const [customBusy, setCustomBusy] = useState(false);
 
   const refreshScanner = useCallback(async (): Promise<void> => {
     setRescanning(true);
@@ -42,6 +53,55 @@ export function App(): JSX.Element {
       setRescanning(false);
     }
   }, []);
+
+  const refreshCustom = useCallback(async (): Promise<void> => {
+    try {
+      const report = await getCustomAdapterReport();
+      setCustom({ kind: "ready", report });
+    } catch (err) {
+      setCustom({ kind: "error", message: describeError(err) });
+    }
+  }, []);
+
+  const handleAddCustom = useCallback(
+    async (input: NewCustomAdapter): Promise<void> => {
+      setCustomBusy(true);
+      try {
+        const report = await addCustomAdapter(input);
+        setCustom({ kind: "ready", report });
+      } finally {
+        setCustomBusy(false);
+      }
+    },
+    [],
+  );
+
+  const handleDeleteCustom = useCallback(async (id: string): Promise<void> => {
+    setCustomBusy(true);
+    try {
+      const report = await deleteCustomAdapter(id);
+      setCustom({ kind: "ready", report });
+    } catch (err) {
+      setCustom({ kind: "error", message: describeError(err) });
+    } finally {
+      setCustomBusy(false);
+    }
+  }, []);
+
+  const handleToggleCustom = useCallback(
+    async (id: string, enabled: boolean): Promise<void> => {
+      setCustomBusy(true);
+      try {
+        const report = await setCustomAdapterEnabled(id, enabled);
+        setCustom({ kind: "ready", report });
+      } catch (err) {
+        setCustom({ kind: "error", message: describeError(err) });
+      } finally {
+        setCustomBusy(false);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -70,10 +130,11 @@ export function App(): JSX.Element {
       }
     })();
     void refreshScanner();
+    void refreshCustom();
     return () => {
       cancelled = true;
     };
-  }, [refreshScanner]);
+  }, [refreshScanner, refreshCustom]);
 
   return (
     <div className="app">
@@ -93,6 +154,13 @@ export function App(): JSX.Element {
             void refreshScanner();
           }}
           rescanning={rescanning}
+        />
+        <CustomAdaptersCard
+          state={custom}
+          busy={customBusy}
+          onAdd={handleAddCustom}
+          onDelete={handleDeleteCustom}
+          onToggle={handleToggleCustom}
         />
 
         <section className="card card--placeholder">

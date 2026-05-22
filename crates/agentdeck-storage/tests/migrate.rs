@@ -20,13 +20,14 @@ fn rfc3339_now() -> String {
 }
 
 #[test]
-fn fresh_in_memory_db_has_schema_v1() {
+fn fresh_in_memory_db_has_latest_schema() {
     let storage = Storage::open_in_memory().expect("in-memory open succeeds");
     let diag = storage.diagnostics().expect("diagnostics succeed");
-    assert_eq!(diag.schema_version, 1);
-    assert_eq!(diag.applied_migrations.len(), 1);
+    assert_eq!(diag.schema_version, 2);
+    assert_eq!(diag.applied_migrations.len(), 2);
     assert_eq!(diag.applied_migrations[0].version, 1);
-    assert_eq!(diag.tables.len(), 9, "all known tables exist");
+    assert_eq!(diag.applied_migrations[1].version, 2);
+    assert_eq!(diag.tables.len(), 10, "all known tables exist");
 }
 
 #[test]
@@ -53,14 +54,14 @@ fn opening_existing_db_is_idempotent() {
         let storage = Storage::open(&path).expect("first open succeeds");
         assert_eq!(
             storage.diagnostics().expect("diagnostics").schema_version,
-            1
+            2
         );
     }
 
     // Reopen; should not error or change schema version.
     let storage = Storage::open(&path).expect("second open succeeds");
     let diag = storage.diagnostics().expect("diagnostics on reopen");
-    assert_eq!(diag.schema_version, 1);
+    assert_eq!(diag.schema_version, 2);
     assert!(
         diag.size_bytes.unwrap_or(0) > 0,
         "on-disk DB reports a non-zero file size"
@@ -170,6 +171,80 @@ fn round_trips_session_and_event() {
     assert_eq!(by_name("sessions"), 1);
     assert_eq!(by_name("session_events"), 1);
     assert_eq!(by_name("attention_items"), 0);
+}
+
+#[test]
+fn custom_adapters_table_enforces_match_kind_check() {
+    let storage = Storage::open_in_memory().expect("open");
+    let now = rfc3339_now();
+
+    let err = storage
+        .with_conn(|c| {
+            c.execute(
+                "INSERT INTO custom_adapters \
+                 (id, label, agent_name, match_kind, pattern, created_at, updated_at) \
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                params![
+                    "33333333-3333-3333-3333-333333333333",
+                    "my-bot",
+                    "my-bot",
+                    "not-a-valid-kind",
+                    "foo",
+                    &now,
+                    &now,
+                ],
+            )
+        })
+        .expect_err("invalid match_kind must fail CHECK constraint");
+
+    let msg = err.to_string().to_lowercase();
+    assert!(msg.contains("check"), "error mentions CHECK: {msg}");
+}
+
+#[test]
+fn custom_adapters_label_is_unique() {
+    let storage = Storage::open_in_memory().expect("open");
+    let now = rfc3339_now();
+
+    storage
+        .with_conn(|c| {
+            c.execute(
+                "INSERT INTO custom_adapters \
+                 (id, label, agent_name, match_kind, pattern, created_at, updated_at) \
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                params![
+                    "44444444-4444-4444-4444-444444444444",
+                    "duplicate",
+                    "agent",
+                    "name",
+                    "agent",
+                    &now,
+                    &now,
+                ],
+            )
+        })
+        .expect("first insert succeeds");
+
+    let err = storage
+        .with_conn(|c| {
+            c.execute(
+                "INSERT INTO custom_adapters \
+                 (id, label, agent_name, match_kind, pattern, created_at, updated_at) \
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                params![
+                    "55555555-5555-5555-5555-555555555555",
+                    "duplicate",
+                    "agent",
+                    "name",
+                    "agent",
+                    &now,
+                    &now,
+                ],
+            )
+        })
+        .expect_err("duplicate label must fail UNIQUE");
+    let msg = err.to_string().to_lowercase();
+    assert!(msg.contains("unique"), "error mentions UNIQUE: {msg}");
 }
 
 #[test]

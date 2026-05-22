@@ -33,10 +33,16 @@ struct Step {
     up_sql: &'static str,
 }
 
-const STEPS: &[Step] = &[Step {
-    label: "Initial schema (sessions, events, attention, diagnostics, usage, tags, remote commands, audit, settings)",
-    up_sql: include_str!("../migrations/0001_initial.sql"),
-}];
+const STEPS: &[Step] = &[
+    Step {
+        label: "Initial schema (sessions, events, attention, diagnostics, usage, tags, remote commands, audit, settings)",
+        up_sql: include_str!("../migrations/0001_initial.sql"),
+    },
+    Step {
+        label: "Custom adapters (user-defined Level 1 process matchers)",
+        up_sql: include_str!("../migrations/0002_custom_adapters.sql"),
+    },
+];
 
 /// Build the [`Migrations`] manifest for the current binary.
 pub(crate) fn build() -> Migrations<'static> {
