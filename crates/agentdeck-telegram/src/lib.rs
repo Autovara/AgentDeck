@@ -30,7 +30,9 @@ pub mod commands;
 pub mod error;
 pub mod pairing;
 pub mod rate_limit;
+pub mod remote_commands;
 pub mod settings;
+pub mod stop;
 
 pub use allowlist::AllowlistEntry;
 pub use bot::{start_bot, BotContext, BotHandle};
@@ -38,9 +40,16 @@ pub use commands::{
     format_agents, format_attention, format_help, format_mute_all_failed,
     format_mute_no_attention, format_mute_out_of_range, format_mute_success, format_mute_usage,
     format_rate_limited, format_session_detail, format_session_not_found, format_session_usage,
-    format_status, format_unknown_command, lookup_session, parse_command, short_session_id,
-    BotCommand, SessionLookup, DEFAULT_MUTE_HOURS, MAX_MUTE_HOURS,
+    format_status, format_stop_already_completed, format_stop_expired, format_stop_failed,
+    format_stop_mismatch, format_stop_no_pending, format_stop_prompt, format_stop_session_not_found,
+    format_stop_success, format_stop_unsupported, format_stop_usage, format_unknown_command,
+    lookup_session, parse_command, short_session_id, BotCommand, SessionLookup,
+    DEFAULT_MUTE_HOURS, MAX_MUTE_HOURS,
 };
 pub use error::TelegramError;
 pub use pairing::{generate_pairing_code, PairingCode, PairingState, TryConsume};
 pub use rate_limit::{RateLimitOutcome, RateLimiter};
+pub use stop::{
+    PendingStop, StopConfirmationState, StopDispatcher, StopOutcome, TryConsumeStop,
+    STOP_CONFIRMATION_WINDOW,
+};

@@ -30,6 +30,8 @@ const ACTOR_DASHBOARD: &str = "dashboard";
 const ACTOR_TELEGRAM_BOT: &str = "telegram-bot";
 
 const RESULT_SUCCESS: &str = "success";
+const RESULT_FAILED: &str = "failed";
+const RESULT_AUDIT_ONLY: &str = "audit_only";
 
 /// Telegram was enabled or disabled from the dashboard.
 pub fn write_telegram_enabled(
@@ -43,6 +45,7 @@ pub fn write_telegram_enabled(
         if enabled { "telegram.enabled" } else { "telegram.disabled" },
         None,
         None,
+        RESULT_SUCCESS,
         json!({ "enabled": enabled }),
         now,
     )
@@ -65,6 +68,7 @@ pub fn write_telegram_token_changed(
         },
         None,
         None,
+        RESULT_SUCCESS,
         json!({ "has_token": has_token }),
         now,
     )
@@ -83,6 +87,7 @@ pub fn write_pairing_code_generated(
         "telegram.pairing_code_generated",
         None,
         None,
+        RESULT_SUCCESS,
         Value::Null,
         now,
     )
@@ -102,6 +107,7 @@ pub fn write_telegram_paired(
         "telegram.paired",
         Some("telegram_user"),
         Some(user_id.to_string()),
+        RESULT_SUCCESS,
         json!({ "username": username }),
         now,
     )
@@ -119,7 +125,84 @@ pub fn write_telegram_revoked(
         "telegram.revoked",
         Some("telegram_user"),
         Some(user_id.to_string()),
+        RESULT_SUCCESS,
         Value::Null,
+        now,
+    )
+}
+
+/// `/stop <id>` arrived and was staged for confirmation. The signal
+/// has not been sent yet; this row exists purely so the audit trail
+/// records intent.
+pub fn write_stop_requested(
+    storage: &Arc<Storage>,
+    command_id: uuid::Uuid,
+    session_id: uuid::Uuid,
+    telegram_user_id: i64,
+    now: DateTime<Utc>,
+) -> Result<(), TelegramError> {
+    write(
+        storage,
+        ACTOR_TELEGRAM_BOT,
+        "stop.requested",
+        Some("session"),
+        Some(session_id.to_string()),
+        RESULT_AUDIT_ONLY,
+        json!({
+            "remote_command_id": command_id.to_string(),
+            "telegram_user_id": telegram_user_id,
+        }),
+        now,
+    )
+}
+
+/// A `STOP <id>` confirmation was processed. `result` is one of
+/// `"success"`, `"failed"`, or `"audit_only"` (the last for
+/// `Unsupported` / `AlreadyCompleted` / `SessionNotFound` branches that
+/// did not actually send a signal). `mechanism` and `error` carry the
+/// dispatcher's output verbatim.
+/// Audit result tag for [`write_stop_executed`].
+#[derive(Debug, Clone, Copy)]
+pub enum StopAuditResult {
+    Success,
+    Failed,
+    AuditOnly,
+}
+
+impl StopAuditResult {
+    fn as_db_str(self) -> &'static str {
+        match self {
+            Self::Success => RESULT_SUCCESS,
+            Self::Failed => RESULT_FAILED,
+            Self::AuditOnly => RESULT_AUDIT_ONLY,
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn write_stop_executed(
+    storage: &Arc<Storage>,
+    command_id: uuid::Uuid,
+    session_id: uuid::Uuid,
+    telegram_user_id: i64,
+    result: StopAuditResult,
+    mechanism: Option<&str>,
+    error: Option<&str>,
+    now: DateTime<Utc>,
+) -> Result<(), TelegramError> {
+    write(
+        storage,
+        ACTOR_TELEGRAM_BOT,
+        "stop.executed",
+        Some("session"),
+        Some(session_id.to_string()),
+        result.as_db_str(),
+        json!({
+            "remote_command_id": command_id.to_string(),
+            "telegram_user_id": telegram_user_id,
+            "mechanism": mechanism,
+            "error": error,
+        }),
         now,
     )
 }
@@ -139,6 +222,7 @@ pub fn write_telegram_attention_muted(
         "attention.muted",
         Some("attention_item"),
         Some(attention_id.to_string()),
+        RESULT_SUCCESS,
         json!({
             "session_id": session_id.to_string(),
             "hours": hours,
@@ -149,12 +233,14 @@ pub fn write_telegram_attention_muted(
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn write(
     storage: &Arc<Storage>,
     actor: &str,
     action: &str,
     target_type: Option<&str>,
     target_id: Option<String>,
+    result: &str,
     metadata: Value,
     now: DateTime<Utc>,
 ) -> Result<(), TelegramError> {
@@ -169,16 +255,7 @@ fn write(
             "INSERT INTO audit_log \
                 (actor, source, action, target_type, target_id, result, metadata, created_at) \
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-            params![
-                actor,
-                SOURCE,
-                action,
-                target_type,
-                target_id,
-                RESULT_SUCCESS,
-                metadata_text,
-                ts,
-            ],
+            params![actor, SOURCE, action, target_type, target_id, result, metadata_text, ts,],
         )
     })?;
     Ok(())

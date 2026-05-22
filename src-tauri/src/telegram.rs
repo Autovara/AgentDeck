@@ -23,8 +23,12 @@ use agentdeck_telegram::{
     allowlist, audit,
     bot::{self, BotContext, BotHandle},
     pairing::{self, PairingState, DEFAULT_EXPIRY},
-    settings, AllowlistEntry, RateLimiter, TelegramError,
+    settings,
+    stop::{StopConfirmationState, StopDispatcher},
+    AllowlistEntry, RateLimiter, TelegramError,
 };
+
+use crate::stop::PlatformStopDispatcher;
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 
@@ -80,6 +84,8 @@ struct Inner {
     pairing: Arc<PairingState>,
     attention: Arc<AttentionEngine>,
     rate_limiter: Arc<RateLimiter>,
+    stop_confirmations: Arc<StopConfirmationState>,
+    stop_dispatcher: Arc<dyn StopDispatcher>,
     bot: Mutex<Option<BotHandle>>,
 }
 
@@ -92,6 +98,8 @@ impl TelegramState {
                     attention: Arc::new(AttentionEngine::new(storage.clone(), clock)),
                     rate_limiter: Arc::new(RateLimiter::with_defaults()),
                     pairing: Arc::new(PairingState::new()),
+                    stop_confirmations: Arc::new(StopConfirmationState::new()),
+                    stop_dispatcher: Arc::new(PlatformStopDispatcher::new(storage.clone())),
                     storage,
                     bot: Mutex::new(None),
                 }
@@ -283,6 +291,8 @@ async fn restart_bot(inner: &Inner, token: Option<String>) {
         pairing: inner.pairing.clone(),
         attention: inner.attention.clone(),
         rate_limiter: inner.rate_limiter.clone(),
+        stop_confirmations: inner.stop_confirmations.clone(),
+        stop_dispatcher: inner.stop_dispatcher.clone(),
     };
     let handle = bot::start_bot(token, ctx);
     let mut guard = inner.bot.lock().expect("telegram bot mutex poisoned");

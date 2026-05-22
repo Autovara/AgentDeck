@@ -26,6 +26,20 @@ Defaults the alpha must enforce:
 - Commands are rate-limited.
 - The `/stop` action dispatches through the adapter and uses the platform-correct termination mechanism. Adapters that cannot map `Stop` to a known-safe action must report `stop_unsupported` instead of attempting termination.
 
+### `/stop` confirmation invariants (alpha)
+
+`/stop` is the only destructive remote command AgentDeck implements today. Every confirmed stop sends exactly one signal: `SIGTERM` on Unix, `taskkill /F /PID` on Windows. Per-adapter SIGINT-first cleanup lands when an adapter is promoted to capability Level 4.
+
+The invariants enforced by `agentdeck-telegram` and `src-tauri/src/stop.rs`:
+
+- The two-message protocol — `/stop <id>` followed by `STOP <id>` — is mandatory. There is no API path that skips the confirmation step.
+- Pending confirmations are kept per Telegram user id, **in memory only**, with a fixed 60-second expiry. A crash wipes them.
+- `STOP <code>` with no pending slot, mismatch, or expiry never sends a signal.
+- `/stop` and `STOP` both write to `audit_log`. `stop.requested` is `audit_only`; `stop.executed` records `success`, `failed`, or `audit_only` depending on the dispatcher outcome. The dispatcher's `mechanism` (`SIGTERM` / `taskkill`) and any error message are stored verbatim in the row's metadata.
+- The `remote_commands` table mirrors the lifecycle (`pending` → `executed` | `failed`) so the dashboard can render a stop history surface later.
+- Sessions whose status is already `completed` short-circuit before any signal is sent.
+- Sessions with `pid IS NULL` short-circuit as `Unsupported`.
+
 ## Secret handling
 
 - Notifications and chat messages must not include raw secrets.

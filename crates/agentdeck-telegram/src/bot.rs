@@ -31,16 +31,25 @@ use teloxide::dispatching::ShutdownToken;
 use teloxide::prelude::*;
 use tokio::task::JoinHandle;
 
+use crate::audit::StopAuditResult;
 use crate::commands::{
     format_agents, format_attention, format_help, format_mute_all_failed,
     format_mute_no_attention, format_mute_out_of_range, format_mute_success, format_mute_usage,
     format_rate_limited, format_session_ambiguous, format_session_detail, format_session_not_found,
-    format_session_usage, format_status, format_unknown_command, lookup_session, parse_command,
+    format_session_usage, format_status, format_stop_already_completed, format_stop_expired,
+    format_stop_failed, format_stop_mismatch, format_stop_no_pending, format_stop_prompt,
+    format_stop_session_not_found, format_stop_success, format_stop_unsupported,
+    format_stop_usage, format_unknown_command, lookup_session, parse_command, short_session_id,
     BotCommand, SessionLookup, DEFAULT_MUTE_HOURS, MAX_MUTE_HOURS,
 };
 use crate::pairing::{PairingState, TryConsume};
 use crate::rate_limit::{RateLimitOutcome, RateLimiter};
-use crate::{allowlist, audit};
+use crate::stop::{
+    PendingStop, StopConfirmationState, StopDispatcher, StopOutcome, TryConsumeStop,
+    STOP_CONFIRMATION_WINDOW,
+};
+use crate::{allowlist, audit, remote_commands};
+use uuid::Uuid;
 
 /// Shared state every bot handler gets. Wrapped in an `Arc` so the
 /// teloxide dispatcher can clone it into each per-message handler
@@ -51,6 +60,8 @@ pub struct BotContext {
     pub pairing: Arc<PairingState>,
     pub attention: Arc<AttentionEngine>,
     pub rate_limiter: Arc<RateLimiter>,
+    pub stop_confirmations: Arc<StopConfirmationState>,
+    pub stop_dispatcher: Arc<dyn StopDispatcher>,
 }
 
 /// Handle returned by [`start_bot`]. Calling [`BotHandle::shutdown`]
@@ -148,17 +159,25 @@ async fn handle_message(bot: Bot, msg: Message, ctx: BotContext) -> ResponseResu
         return Ok(());
     }
 
+    // STOP <code> confirmation arrives as free-form text (paralleling
+    // PAIR). Match it before the slash-command parser since the
+    // parser would otherwise reject it.
+    if let Some(rest) = text.strip_prefix("STOP ").or_else(|| text.strip_prefix("stop ")) {
+        return reply_stop_confirmation(&bot, chat_id, user_id, rest.trim(), &ctx).await;
+    }
+
     // Parse the slash command. Free-form text from paired users is
     // ignored; the alpha bot is command-only.
     let Some(command) = parse_command(text) else {
         return Ok(());
     };
-    dispatch_command(&bot, chat_id, &ctx, command).await
+    dispatch_command(&bot, chat_id, user_id, &ctx, command).await
 }
 
 async fn dispatch_command(
     bot: &Bot,
     chat_id: ChatId,
+    user_id: i64,
     ctx: &BotContext,
     command: BotCommand,
 ) -> ResponseResult<()> {
@@ -186,6 +205,11 @@ async fn dispatch_command(
             Err(s) => s,
         },
         BotCommand::MuteUsage => format_mute_usage(),
+        BotCommand::Stop(arg) => match build_stop_prompt_reply(ctx, user_id, &arg).await {
+            Ok(s) => s,
+            Err(s) => s,
+        },
+        BotCommand::StopUsage => format_stop_usage(),
         BotCommand::Unknown(name) => format_unknown_command(&name),
     };
     bot.send_message(chat_id, reply).await?;
@@ -305,6 +329,184 @@ async fn build_mute_reply(
         return Ok(format_mute_all_failed());
     }
     Ok(format_mute_success(session, muted, hours, until))
+}
+
+/// Handle `/stop <id>`: stage a pending confirmation, persist a
+/// `remote_commands` row, write the audit row, and reply with the
+/// confirmation prompt.
+async fn build_stop_prompt_reply(
+    ctx: &BotContext,
+    user_id: i64,
+    query: &str,
+) -> Result<String, String> {
+    let sessions = load_active_sessions(ctx)?;
+    let session = match lookup_session(query, &sessions) {
+        SessionLookup::NotFound => return Ok(format_session_not_found(query)),
+        SessionLookup::Ambiguous(candidates) => {
+            return Ok(format_session_ambiguous(query, &candidates));
+        }
+        SessionLookup::Found(s) => s,
+    };
+
+    let now = Utc::now();
+    let command_id = Uuid::new_v4();
+    let short_id = short_session_id(session.id);
+
+    // Persist the pending command row first so the audit trail is
+    // never lighter than the in-memory state.
+    if let Err(err) = remote_commands::insert_pending_stop(
+        &ctx.storage,
+        command_id,
+        user_id,
+        session.id,
+        now,
+    ) {
+        tracing::warn!(error = %err, "telegram: failed to insert pending stop row");
+        return Ok("Could not stage the stop request. Try again.".to_string());
+    }
+    if let Err(err) =
+        audit::write_stop_requested(&ctx.storage, command_id, session.id, user_id, now)
+    {
+        tracing::warn!(error = %err, "telegram: audit log write failed for /stop");
+    }
+
+    ctx.stop_confirmations.start(
+        user_id,
+        PendingStop {
+            session_id: session.id,
+            short_id: short_id.clone(),
+            command_id,
+            expires_at: now + STOP_CONFIRMATION_WINDOW,
+        },
+    );
+
+    Ok(format_stop_prompt(session, &short_id))
+}
+
+/// Handle the free-form `STOP <code>` confirmation: consume the pending
+/// slot, dispatch via the platform stop, update `remote_commands`,
+/// write the audit row, and reply with the outcome.
+async fn reply_stop_confirmation(
+    bot: &Bot,
+    chat_id: ChatId,
+    user_id: i64,
+    code: &str,
+    ctx: &BotContext,
+) -> ResponseResult<()> {
+    let now = Utc::now();
+    let pending = match ctx.stop_confirmations.try_consume(user_id, code, now) {
+        TryConsumeStop::NoPending => {
+            bot.send_message(chat_id, format_stop_no_pending(code)).await?;
+            return Ok(());
+        }
+        TryConsumeStop::Expired => {
+            bot.send_message(chat_id, format_stop_expired()).await?;
+            return Ok(());
+        }
+        TryConsumeStop::Mismatch => {
+            bot.send_message(chat_id, format_stop_mismatch()).await?;
+            return Ok(());
+        }
+        TryConsumeStop::Matched(p) => p,
+    };
+
+    // Hand off to the dispatcher. The trait method is synchronous; the
+    // platform implementations all complete in milliseconds.
+    let outcome = ctx.stop_dispatcher.stop(pending.session_id);
+    let (reply, audit_result, mechanism, error_text, rc_success, rc_error) =
+        classify_outcome(&pending.short_id, &outcome);
+
+    // Update remote_commands lifecycle.
+    if let Err(err) = remote_commands::mark_executed(
+        &ctx.storage,
+        pending.command_id,
+        rc_success,
+        rc_error.as_deref(),
+        now,
+    ) {
+        tracing::warn!(
+            error = %err,
+            command_id = %pending.command_id,
+            "telegram: failed to update remote_commands after /stop",
+        );
+    }
+
+    if let Err(err) = audit::write_stop_executed(
+        &ctx.storage,
+        pending.command_id,
+        pending.session_id,
+        user_id,
+        audit_result,
+        mechanism.as_deref(),
+        error_text.as_deref(),
+        now,
+    ) {
+        tracing::warn!(
+            error = %err,
+            command_id = %pending.command_id,
+            "telegram: audit log write failed for STOP confirmation",
+        );
+    }
+
+    bot.send_message(chat_id, reply).await?;
+    Ok(())
+}
+
+/// Map a [`StopOutcome`] to (reply, audit_result, mechanism, error_text,
+/// remote_commands.success, remote_commands.error).
+fn classify_outcome(
+    short_id: &str,
+    outcome: &StopOutcome,
+) -> (
+    String,
+    StopAuditResult,
+    Option<String>,
+    Option<String>,
+    bool,
+    Option<String>,
+) {
+    match outcome {
+        StopOutcome::Success { mechanism } => (
+            format_stop_success(short_id, mechanism),
+            StopAuditResult::Success,
+            Some(mechanism.clone()),
+            None,
+            true,
+            None,
+        ),
+        StopOutcome::SessionNotFound => (
+            format_stop_session_not_found(short_id),
+            StopAuditResult::AuditOnly,
+            None,
+            None,
+            false,
+            Some("session_not_found".to_string()),
+        ),
+        StopOutcome::AlreadyCompleted => (
+            format_stop_already_completed(short_id),
+            StopAuditResult::AuditOnly,
+            None,
+            None,
+            false,
+            Some("already_completed".to_string()),
+        ),
+        StopOutcome::Unsupported { reason } => (
+            format_stop_unsupported(short_id, reason),
+            StopAuditResult::AuditOnly,
+            None,
+            Some(reason.clone()),
+            false,
+            Some(format!("unsupported: {reason}")),
+        ),
+        StopOutcome::Failed { reason } => (
+            format_stop_failed(short_id, reason),
+            StopAuditResult::Failed,
+            None,
+            Some(reason.clone()),
+            false,
+            Some(reason.clone()),
+        ),
+    }
 }
 
 async fn reply_pairing(

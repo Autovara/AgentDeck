@@ -20,6 +20,7 @@ mod monitor_tick;
 mod notifications;
 mod overview;
 mod process_scanner;
+mod stop;
 mod storage;
 mod telegram;
 mod tray;

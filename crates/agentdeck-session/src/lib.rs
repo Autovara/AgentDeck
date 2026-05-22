@@ -61,3 +61,16 @@ pub fn list_active(storage: &Arc<Storage>) -> Result<Vec<Session>, SessionError>
         .with_conn(repository::list_active)
         .map_err(SessionError::from)
 }
+
+/// Look up a single session by id. Returns `Ok(None)` when the row does
+/// not exist; the row is returned regardless of its status, so a caller
+/// (e.g. `/stop`) can distinguish "no such session" from "already
+/// completed".
+pub fn get_session(
+    storage: &Arc<Storage>,
+    id: uuid::Uuid,
+) -> Result<Option<Session>, SessionError> {
+    storage
+        .with_conn(|conn| repository::get(conn, id))
+        .map_err(SessionError::from)
+}

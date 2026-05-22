@@ -57,6 +57,13 @@ pub enum BotCommand {
     /// `/mute` with no argument *or* with an unparseable `<hours>`
     /// argument. The dispatcher renders [`format_mute_usage`].
     MuteUsage,
+    /// `/stop <session-id>` — request a destructive stop. The bot
+    /// stages a confirmation; the actual signal only fires when the
+    /// user sends `STOP <id>` within
+    /// [`crate::stop::STOP_CONFIRMATION_WINDOW`].
+    Stop(String),
+    /// `/stop` with no argument.
+    StopUsage,
     /// `/foo` where `foo` is not a known command. The string is what
     /// the user typed (without the leading slash) so the reply can
     /// echo it back.
@@ -89,6 +96,8 @@ pub fn parse_command(text: &str) -> Option<BotCommand> {
         "session" if arg.is_empty() => BotCommand::SessionUsage,
         "session" => BotCommand::Session(arg.to_string()),
         "mute" => parse_mute_args(arg),
+        "stop" if arg.is_empty() => BotCommand::StopUsage,
+        "stop" => BotCommand::Stop(arg.to_string()),
         other => BotCommand::Unknown(other.to_string()),
     })
 }
@@ -171,9 +180,9 @@ pub fn format_help() -> String {
     s.push_str("/agents              List active sessions\n");
     s.push_str("/attention           List open attention items\n");
     s.push_str("/session <id>        Detail for one session\n");
-    s.push_str("/mute <id> [hours]   Silence a session's attention (default 1h, max 168)\n\n");
-    s.push_str("Session ids are the first 6 hex chars shown in /agents.\n");
-    s.push_str("/stop arrives in a later alpha build.");
+    s.push_str("/mute <id> [hours]   Silence a session's attention (default 1h, max 168)\n");
+    s.push_str("/stop <id>           Terminate a session (requires STOP <id> confirmation)\n\n");
+    s.push_str("Session ids are the first 6 hex chars shown in /agents.");
     s
 }
 
@@ -378,6 +387,83 @@ pub fn format_mute_success(
 /// items were present (storage error).
 pub fn format_mute_all_failed() -> String {
     "Failed to mute any attention items. Open the AgentDeck app to check the diagnostics.".to_string()
+}
+
+/// Reply for `/stop` with no argument.
+pub fn format_stop_usage() -> String {
+    "Usage: /stop <session-id> (id is the 6-char prefix shown in /agents)".to_string()
+}
+
+/// Reply for `/stop <id>` — asks the user to confirm.
+pub fn format_stop_prompt(session: &Session, short_id: &str) -> String {
+    format!(
+        "Confirm stop for [{}] {} · {}?\n\
+         Reply: STOP {}\n\
+         (within 60s — pid {} will be terminated)",
+        short_id,
+        session.agent_name,
+        session.repo_path.as_deref().unwrap_or("—"),
+        short_id,
+        session
+            .pid
+            .map(|p| p.to_string())
+            .unwrap_or_else(|| "—".into()),
+    )
+}
+
+/// Reply when `STOP <code>` arrives but the user has no pending stop.
+pub fn format_stop_no_pending(code: &str) -> String {
+    if code.is_empty() {
+        "No pending stop. Send /stop <id> first.".to_string()
+    } else {
+        format!("No pending stop. Send /stop {code} first.")
+    }
+}
+
+/// Reply when `STOP <code>` arrives after the 60s window expired.
+pub fn format_stop_expired() -> String {
+    "That stop confirmation expired. Send /stop <id> again to start over.".to_string()
+}
+
+/// Reply when `STOP <code>` does not match the pending stop's id.
+pub fn format_stop_mismatch() -> String {
+    "That confirmation does not match your pending stop. Send /stop <id> to start over."
+        .to_string()
+}
+
+/// Reply when the dispatcher reported a successful stop. Intentionally
+/// omits agent / repo names — the user already saw those in the
+/// `/stop` prompt 60s ago at most, and re-reading the session at
+/// confirmation time risks racing with the killed process's
+/// `process_exited` event.
+pub fn format_stop_success(short_id: &str, mechanism: &str) -> String {
+    format!("Stop requested for session [{short_id}].\nResult: success ({mechanism}).")
+}
+
+/// Reply when the dispatcher reported the session was already
+/// completed before the stop could be attempted.
+pub fn format_stop_already_completed(short_id: &str) -> String {
+    format!("Session [{short_id}] is already completed. No action taken.")
+}
+
+/// Reply when the dispatcher reported the session disappeared between
+/// the `/stop` prompt and the confirmation.
+pub fn format_stop_session_not_found(short_id: &str) -> String {
+    format!(
+        "Session [{short_id}] is no longer in the active set. It may have completed already."
+    )
+}
+
+/// Reply when the dispatcher declined the request because the
+/// session is not stop-supported (e.g. no PID).
+pub fn format_stop_unsupported(short_id: &str, reason: &str) -> String {
+    format!("Stop not supported for session [{short_id}]: {reason}.")
+}
+
+/// Reply when the dispatcher attempted the platform call and it
+/// failed.
+pub fn format_stop_failed(short_id: &str, reason: &str) -> String {
+    format!("Stop for session [{short_id}] failed: {reason}.")
 }
 
 /// Reply for any unknown slash command.

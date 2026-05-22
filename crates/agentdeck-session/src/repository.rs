@@ -32,6 +32,18 @@ pub(crate) fn list_active(conn: &Connection) -> rusqlite::Result<Vec<Session>> {
     iter.collect()
 }
 
+/// Look up a single session by id, regardless of status. Returns
+/// `Ok(None)` when the row does not exist.
+pub(crate) fn get(conn: &Connection, id: Uuid) -> rusqlite::Result<Option<Session>> {
+    let query = format!("SELECT {SESSION_COLUMNS} FROM sessions WHERE id = ?1");
+    let mut stmt = conn.prepare(&query)?;
+    let mut rows = stmt.query([id.to_string()])?;
+    match rows.next()? {
+        Some(row) => Ok(Some(session_from_row(row)?)),
+        None => Ok(None),
+    }
+}
+
 /// Insert a brand new session row.
 pub(crate) fn insert(conn: &Connection, session: &Session) -> rusqlite::Result<()> {
     let inserted = conn.execute(

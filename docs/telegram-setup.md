@@ -1,6 +1,6 @@
 # Telegram Setup
 
-> Status: alpha. Pairing, the read-only commands, and `/mute` are implemented; `/stop` arrives in a later alpha build.
+> Status: alpha. Pairing, the read-only commands, `/mute`, and `/stop` (with confirmation) are all implemented.
 
 Telegram is **off by default**. Until you complete the steps below, AgentDeck never contacts `api.telegram.org`.
 
@@ -55,12 +55,30 @@ Once paired, send any of the following to your bot. Replies are plain text — e
 - `/attention` — open attention items, urgent first
 - `/session <id>` — detail for one session; `<id>` is the 6-char prefix shown in `/agents`. A shorter prefix works as long as it is unambiguous; you'll get a "matches N sessions" reply if not.
 - `/mute <id> [hours]` — silence every open attention item attached to a session. `hours` defaults to **1** and is capped at **168** (7 days). Resolution still happens automatically: when the underlying session state stops triggering the rule, the mute is irrelevant. Each `/mute` writes an `attention.muted` row to the audit log.
+- `/stop <id>` — request termination. **Always requires confirmation** via a second `STOP <id>` message within 60s. See "Stopping a session safely" below.
 
-Each user is rate-limited to **30 commands per minute** with a burst of **10**. Exceeding the limit returns a `Try again in Ns` reply and does not consume the failed command. Pairing (`PAIR <code>`) is **not** rate-limited.
+Each user is rate-limited to **30 commands per minute** with a burst of **10**. Exceeding the limit returns a `Try again in Ns` reply and does not consume the failed command. Pairing (`PAIR <code>`) is **not** rate-limited; `/stop` and `STOP <id>` count against the bucket like everything else.
 
-Coming in a later alpha build:
+## Stopping a session safely
 
-- `/stop <id>` with confirmation, per [`security.md`](security.md) (build-plan step 20)
+`/stop` is the only destructive command AgentDeck exposes. The flow:
+
+1. Send `/stop <id>` (where `<id>` is the 6-char prefix from `/agents`).
+2. The bot replies with a confirmation prompt that names the agent, repo, and PID. The pending stop is staged in memory and as a `pending` row in `remote_commands`, but no signal is sent yet.
+3. Send `STOP <id>` (uppercase `STOP`) within **60 seconds** to confirm.
+4. The bot sends `SIGTERM` to the PID (Unix) or `taskkill /F /PID <pid>` (Windows) and replies with the outcome.
+
+Both messages — `/stop` and `STOP <id>` — write `audit_log` rows. The `stop.executed` row records the dispatcher's `mechanism` (`SIGTERM` / `taskkill`) on success or the raw error string on failure.
+
+Why a single signal? Build-plan §11.4 calls for a SIGINT-first dance on TUI-aware adapters, but the alpha adapters all run at capability Level 1. Per-adapter overrides land when an adapter is promoted to Level 4 (Control); until then every session uses the platform default.
+
+Edge cases the bot handles gracefully:
+
+- **`STOP <id>` with no pending stop** — the bot says "no pending stop" without revealing whether the id is real.
+- **`STOP <id>` after 60s** — the slot evicts; the bot says "expired".
+- **`STOP <wrong-id>`** — mismatch is reported, the original pending stays valid until 60s elapses.
+- **Session already completed** — the dispatcher catches it before any signal is sent and writes an `audit_only` row.
+- **Session row has no PID** — replies "stop not supported" and writes `audit_only`.
 
 ## Troubleshooting
 
