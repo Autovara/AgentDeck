@@ -31,6 +31,14 @@ pub const SHORT_ID_LEN: usize = 6;
 
 // ----- command parsing ----------------------------------------------------
 
+/// Default mute duration when `/mute <id>` is sent without an
+/// explicit `<hours>` argument.
+pub const DEFAULT_MUTE_HOURS: u32 = 1;
+
+/// Inclusive upper bound on the `<hours>` argument of `/mute`.
+/// 7 days; longer is more "ignore forever" than "snooze".
+pub const MAX_MUTE_HOURS: u32 = 168;
+
 /// Recognised slash command from a Telegram message.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BotCommand {
@@ -42,6 +50,13 @@ pub enum BotCommand {
     Session(String),
     /// `/session` with no argument.
     SessionUsage,
+    /// `/mute <session-id> [hours]`. `hours` is `None` when the
+    /// user omitted the argument; the dispatcher applies
+    /// [`DEFAULT_MUTE_HOURS`].
+    Mute { id: String, hours: Option<u32> },
+    /// `/mute` with no argument *or* with an unparseable `<hours>`
+    /// argument. The dispatcher renders [`format_mute_usage`].
+    MuteUsage,
     /// `/foo` where `foo` is not a known command. The string is what
     /// the user typed (without the leading slash) so the reply can
     /// echo it back.
@@ -73,8 +88,40 @@ pub fn parse_command(text: &str) -> Option<BotCommand> {
         "attention" => BotCommand::Attention,
         "session" if arg.is_empty() => BotCommand::SessionUsage,
         "session" => BotCommand::Session(arg.to_string()),
+        "mute" => parse_mute_args(arg),
         other => BotCommand::Unknown(other.to_string()),
     })
+}
+
+/// Parse the argument string of `/mute`. Accepts:
+///
+/// - `""` → [`BotCommand::MuteUsage`]
+/// - `"<id>"` → `Mute { id, hours: None }`
+/// - `"<id> <hours>"` (hours parses as `u32`) → `Mute { id, hours: Some(_) }`
+/// - any other shape → [`BotCommand::MuteUsage`]
+fn parse_mute_args(arg: &str) -> BotCommand {
+    let mut parts = arg.split_whitespace();
+    let Some(id) = parts.next() else {
+        return BotCommand::MuteUsage;
+    };
+    let hours_str = parts.next();
+    if parts.next().is_some() {
+        // /mute <id> <hours> <extra…>  — reject as usage error
+        return BotCommand::MuteUsage;
+    }
+    match hours_str {
+        None => BotCommand::Mute {
+            id: id.to_string(),
+            hours: None,
+        },
+        Some(s) => match s.parse::<u32>() {
+            Ok(n) => BotCommand::Mute {
+                id: id.to_string(),
+                hours: Some(n),
+            },
+            Err(_) => BotCommand::MuteUsage,
+        },
+    }
 }
 
 // ----- session lookup -----------------------------------------------------
@@ -119,13 +166,14 @@ pub fn lookup_session<'a>(query: &str, sessions: &'a [Session]) -> SessionLookup
 pub fn format_help() -> String {
     let mut s = String::new();
     s.push_str("AgentDeck (alpha) — available commands\n\n");
-    s.push_str("/help        Show this message\n");
-    s.push_str("/status      Headline counts\n");
-    s.push_str("/agents      List active sessions\n");
-    s.push_str("/attention   List open attention items\n");
-    s.push_str("/session <id>  Detail for one session\n\n");
+    s.push_str("/help                Show this message\n");
+    s.push_str("/status              Headline counts\n");
+    s.push_str("/agents              List active sessions\n");
+    s.push_str("/attention           List open attention items\n");
+    s.push_str("/session <id>        Detail for one session\n");
+    s.push_str("/mute <id> [hours]   Silence a session's attention (default 1h, max 168)\n\n");
     s.push_str("Session ids are the first 6 hex chars shown in /agents.\n");
-    s.push_str("/mute and /stop arrive in later alpha builds.");
+    s.push_str("/stop arrives in a later alpha build.");
     s
 }
 
@@ -269,6 +317,67 @@ pub fn format_session_ambiguous(query: &str, candidates: &[&Session]) -> String 
 /// Reply for `/session` with no argument.
 pub fn format_session_usage() -> String {
     "Usage: /session <id> (id is the 6-char prefix shown in /agents)".to_string()
+}
+
+/// Reply for `/mute` with no argument or a malformed `<hours>` value.
+pub fn format_mute_usage() -> String {
+    format!(
+        "Usage: /mute <session-id> [hours]\nhours defaults to {DEFAULT_MUTE_HOURS}, max {MAX_MUTE_HOURS} (7d)."
+    )
+}
+
+/// Reply when the user supplied an out-of-range `<hours>` argument.
+pub fn format_mute_out_of_range(hours: u32) -> String {
+    format!(
+        "Hours must be between 1 and {MAX_MUTE_HOURS} (got {hours}). \
+         Try /mute <id> [hours]."
+    )
+}
+
+/// Reply when `/mute` matched a session with no open attention items.
+pub fn format_mute_no_attention(session: &Session) -> String {
+    format!(
+        "No open attention items for [{}] {} · {}. Nothing to mute.",
+        short_session_id(session.id),
+        session.agent_name,
+        session.repo_path.as_deref().unwrap_or("—"),
+    )
+}
+
+/// Reply when `/mute` successfully silenced one or more items.
+pub fn format_mute_success(
+    session: &Session,
+    muted_count: usize,
+    hours: u32,
+    until: DateTime<Utc>,
+) -> String {
+    let plural = if muted_count == 1 { "item" } else { "items" };
+    let duration_label = if hours == 1 {
+        "1 hour".to_string()
+    } else if hours < 24 {
+        format!("{hours} hours")
+    } else if hours.is_multiple_of(24) {
+        let days = hours / 24;
+        if days == 1 {
+            "1 day".to_string()
+        } else {
+            format!("{days} days")
+        }
+    } else {
+        format!("{hours} hours")
+    };
+    format!(
+        "Muted {muted_count} attention {plural} for {} · {} for {duration_label} (until {}).",
+        session.agent_name,
+        session.repo_path.as_deref().unwrap_or("—"),
+        until.format("%Y-%m-%d %H:%M UTC"),
+    )
+}
+
+/// Reply when every `set_mute` call failed even though attention
+/// items were present (storage error).
+pub fn format_mute_all_failed() -> String {
+    "Failed to mute any attention items. Open the AgentDeck app to check the diagnostics.".to_string()
 }
 
 /// Reply for any unknown slash command.
@@ -667,5 +776,124 @@ mod tests {
         assert!(r.contains("1s"));
         let r = format_rate_limited(Duration::from_secs(42));
         assert!(r.contains("42s"));
+    }
+
+    // ----- /mute parser ----------------------------------------------
+
+    #[test]
+    fn parse_mute_without_arg_is_usage() {
+        assert_eq!(parse_command("/mute"), Some(BotCommand::MuteUsage));
+        assert_eq!(parse_command("/mute   "), Some(BotCommand::MuteUsage));
+    }
+
+    #[test]
+    fn parse_mute_with_id_only() {
+        assert_eq!(
+            parse_command("/mute abc123"),
+            Some(BotCommand::Mute {
+                id: "abc123".into(),
+                hours: None,
+            })
+        );
+    }
+
+    #[test]
+    fn parse_mute_with_id_and_hours() {
+        assert_eq!(
+            parse_command("/mute abc123 4"),
+            Some(BotCommand::Mute {
+                id: "abc123".into(),
+                hours: Some(4),
+            })
+        );
+    }
+
+    #[test]
+    fn parse_mute_with_unparseable_hours_is_usage() {
+        assert_eq!(
+            parse_command("/mute abc123 oneish"),
+            Some(BotCommand::MuteUsage)
+        );
+    }
+
+    #[test]
+    fn parse_mute_with_extra_args_is_usage() {
+        assert_eq!(
+            parse_command("/mute abc123 4 forever"),
+            Some(BotCommand::MuteUsage)
+        );
+    }
+
+    #[test]
+    fn parse_mute_handles_botname_suffix() {
+        assert_eq!(
+            parse_command("/mute@MyAgentDeckBot abc123 2"),
+            Some(BotCommand::Mute {
+                id: "abc123".into(),
+                hours: Some(2),
+            })
+        );
+    }
+
+    // ----- /mute formatters ------------------------------------------
+
+    #[test]
+    fn mute_usage_mentions_defaults_and_max() {
+        let r = format_mute_usage();
+        assert!(r.contains("/mute"));
+        assert!(r.contains(&DEFAULT_MUTE_HOURS.to_string()));
+        assert!(r.contains(&MAX_MUTE_HOURS.to_string()));
+    }
+
+    #[test]
+    fn mute_out_of_range_includes_value_and_bound() {
+        let r = format_mute_out_of_range(200);
+        assert!(r.contains("200"));
+        assert!(r.contains(&MAX_MUTE_HOURS.to_string()));
+    }
+
+    #[test]
+    fn mute_no_attention_includes_short_id_and_repo() {
+        let s = session("aider", SessionStatus::Running, Some("/repo/billing"));
+        let r = format_mute_no_attention(&s);
+        assert!(r.contains(&short_session_id(s.id)));
+        assert!(r.contains("aider"));
+        assert!(r.contains("/repo/billing"));
+    }
+
+    #[test]
+    fn mute_success_singular_vs_plural() {
+        let s = session("aider", SessionStatus::Running, Some("/repo/billing"));
+        let until = ts(3600); // 1 hour from baseline
+        let one = format_mute_success(&s, 1, 1, until);
+        assert!(one.contains("Muted 1 attention item "));
+        assert!(one.contains("1 hour"));
+        let many = format_mute_success(&s, 3, 24, until);
+        assert!(many.contains("Muted 3 attention items "));
+        assert!(many.contains("1 day"));
+    }
+
+    #[test]
+    fn mute_success_includes_repo_and_absolute_until() {
+        let s = session("aider", SessionStatus::Running, Some("/repo/billing"));
+        let until = ts(3600);
+        let r = format_mute_success(&s, 1, 1, until);
+        assert!(r.contains("aider"));
+        assert!(r.contains("/repo/billing"));
+        assert!(r.contains("UTC"));
+    }
+
+    #[test]
+    fn mute_success_renders_multi_day_duration() {
+        let s = session("aider", SessionStatus::Running, None);
+        let r = format_mute_success(&s, 1, 48, ts(0));
+        assert!(r.contains("2 days"));
+    }
+
+    #[test]
+    fn help_mentions_mute_command() {
+        // /mute lands in step 19; /help should now advertise it.
+        let h = format_help();
+        assert!(h.contains("/mute"), "/help should now mention /mute; got: {h}");
     }
 }

@@ -124,6 +124,31 @@ pub fn write_telegram_revoked(
     )
 }
 
+/// An open attention item was muted via Telegram `/mute`.
+pub fn write_telegram_attention_muted(
+    storage: &Arc<Storage>,
+    attention_id: uuid::Uuid,
+    session_id: uuid::Uuid,
+    hours: u32,
+    until: DateTime<Utc>,
+    now: DateTime<Utc>,
+) -> Result<(), TelegramError> {
+    write(
+        storage,
+        ACTOR_TELEGRAM_BOT,
+        "attention.muted",
+        Some("attention_item"),
+        Some(attention_id.to_string()),
+        json!({
+            "session_id": session_id.to_string(),
+            "hours": hours,
+            "until": until.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string(),
+            "via": "telegram",
+        }),
+        now,
+    )
+}
+
 fn write(
     storage: &Arc<Storage>,
     actor: &str,

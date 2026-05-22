@@ -26,15 +26,17 @@ use std::sync::Arc;
 use agentdeck_attention::AttentionEngine;
 use agentdeck_session::{list_active, Session};
 use agentdeck_storage::Storage;
-use chrono::Utc;
+use chrono::{Duration, Utc};
 use teloxide::dispatching::ShutdownToken;
 use teloxide::prelude::*;
 use tokio::task::JoinHandle;
 
 use crate::commands::{
-    format_agents, format_attention, format_help, format_rate_limited, format_session_detail,
-    format_session_ambiguous, format_session_not_found, format_session_usage, format_status,
-    format_unknown_command, lookup_session, parse_command, BotCommand, SessionLookup,
+    format_agents, format_attention, format_help, format_mute_all_failed,
+    format_mute_no_attention, format_mute_out_of_range, format_mute_success, format_mute_usage,
+    format_rate_limited, format_session_ambiguous, format_session_detail, format_session_not_found,
+    format_session_usage, format_status, format_unknown_command, lookup_session, parse_command,
+    BotCommand, SessionLookup, DEFAULT_MUTE_HOURS, MAX_MUTE_HOURS,
 };
 use crate::pairing::{PairingState, TryConsume};
 use crate::rate_limit::{RateLimitOutcome, RateLimiter};
@@ -179,6 +181,11 @@ async fn dispatch_command(
             Err(s) => s,
         },
         BotCommand::SessionUsage => format_session_usage(),
+        BotCommand::Mute { id, hours } => match build_mute_reply(ctx, &id, hours).await {
+            Ok(s) => s,
+            Err(s) => s,
+        },
+        BotCommand::MuteUsage => format_mute_usage(),
         BotCommand::Unknown(name) => format_unknown_command(&name),
     };
     bot.send_message(chat_id, reply).await?;
@@ -229,6 +236,75 @@ async fn build_session_reply(ctx: &BotContext, query: &str) -> Result<String, St
 
 fn load_active_sessions(ctx: &BotContext) -> Result<Vec<Session>, String> {
     list_active(&ctx.storage).map_err(|e| format!("Could not read sessions: {e}"))
+}
+
+async fn build_mute_reply(
+    ctx: &BotContext,
+    query: &str,
+    hours: Option<u32>,
+) -> Result<String, String> {
+    let hours = hours.unwrap_or(DEFAULT_MUTE_HOURS);
+    if !(1..=MAX_MUTE_HOURS).contains(&hours) {
+        return Ok(format_mute_out_of_range(hours));
+    }
+
+    let sessions = load_active_sessions(ctx)?;
+    let session = match lookup_session(query, &sessions) {
+        SessionLookup::NotFound => return Ok(format_session_not_found(query)),
+        SessionLookup::Ambiguous(candidates) => {
+            return Ok(format_session_ambiguous(query, &candidates));
+        }
+        SessionLookup::Found(s) => s,
+    };
+
+    let open = ctx
+        .attention
+        .list_open()
+        .map_err(|e| format!("Could not read attention items: {e}"))?;
+    let for_session: Vec<_> = open
+        .iter()
+        .filter(|e| e.item.session_id == session.id)
+        .collect();
+    if for_session.is_empty() {
+        return Ok(format_mute_no_attention(session));
+    }
+
+    let now = Utc::now();
+    let until = now + Duration::hours(hours as i64);
+    let mut muted = 0_usize;
+    for entry in &for_session {
+        match ctx.attention.set_mute(entry.item.id, Some(until)) {
+            Ok(_) => {
+                muted += 1;
+                if let Err(err) = audit::write_telegram_attention_muted(
+                    &ctx.storage,
+                    entry.item.id,
+                    session.id,
+                    hours,
+                    until,
+                    now,
+                ) {
+                    tracing::warn!(
+                        error = %err,
+                        attention_id = %entry.item.id,
+                        "telegram: audit log write failed for /mute",
+                    );
+                }
+            }
+            Err(err) => {
+                tracing::warn!(
+                    error = %err,
+                    attention_id = %entry.item.id,
+                    "telegram: set_mute failed",
+                );
+            }
+        }
+    }
+
+    if muted == 0 {
+        return Ok(format_mute_all_failed());
+    }
+    Ok(format_mute_success(session, muted, hours, until))
 }
 
 async fn reply_pairing(

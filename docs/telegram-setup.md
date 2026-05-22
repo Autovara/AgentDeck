@@ -1,6 +1,6 @@
 # Telegram Setup
 
-> Status: alpha. Pairing and the read-only commands are implemented; `/mute` and `/stop` arrive in later alpha builds.
+> Status: alpha. Pairing, the read-only commands, and `/mute` are implemented; `/stop` arrives in a later alpha build.
 
 Telegram is **off by default**. Until you complete the steps below, AgentDeck never contacts `api.telegram.org`.
 
@@ -54,12 +54,12 @@ Once paired, send any of the following to your bot. Replies are plain text — e
 - `/agents` — active agent sessions with their 6-character short ids
 - `/attention` — open attention items, urgent first
 - `/session <id>` — detail for one session; `<id>` is the 6-char prefix shown in `/agents`. A shorter prefix works as long as it is unambiguous; you'll get a "matches N sessions" reply if not.
+- `/mute <id> [hours]` — silence every open attention item attached to a session. `hours` defaults to **1** and is capped at **168** (7 days). Resolution still happens automatically: when the underlying session state stops triggering the rule, the mute is irrelevant. Each `/mute` writes an `attention.muted` row to the audit log.
 
 Each user is rate-limited to **30 commands per minute** with a burst of **10**. Exceeding the limit returns a `Try again in Ns` reply and does not consume the failed command. Pairing (`PAIR <code>`) is **not** rate-limited.
 
-Coming in later alpha builds:
+Coming in a later alpha build:
 
-- `/mute <id>` (build-plan step 19)
 - `/stop <id>` with confirmation, per [`security.md`](security.md) (build-plan step 20)
 
 ## Troubleshooting
