@@ -1,0 +1,15 @@
+[package]
+name = "agentdeck-adapter"
+description = "Adapter trait and registry shared by every concrete AgentDeck adapter (custom, aider, codex, claude)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+agentdeck-process = { workspace = true }
+chrono = { workspace = true }
+serde = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }

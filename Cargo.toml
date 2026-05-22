@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "crates/agentdeck-adapter",
     "crates/agentdeck-adapter-custom",
     "crates/agentdeck-core",
     "crates/agentdeck-harness",
@@ -17,6 +18,7 @@ authors = ["AgentDeck contributors"]
 
 [workspace.dependencies]
 # Internal crates
+agentdeck-adapter = { path = "crates/agentdeck-adapter" }
 agentdeck-adapter-custom = { path = "crates/agentdeck-adapter-custom" }
 agentdeck-core = { path = "crates/agentdeck-core" }
 agentdeck-process = { path = "crates/agentdeck-process" }

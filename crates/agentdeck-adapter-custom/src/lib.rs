@@ -24,9 +24,11 @@
 pub mod definition;
 pub mod matcher;
 pub mod repository;
+pub mod runtime;
 
 pub use definition::{
     CustomAdapter, CustomAdapterError, MatchKind, NewCustomAdapter, MAX_LABEL_LEN, MAX_PATTERN_LEN,
 };
 pub use matcher::{group_by_adapter, match_snapshot, CompiledAdapter, CustomAdapterMatch};
 pub use repository::CustomAdapterRepository;
+pub use runtime::{CustomProcessAdapter, ADAPTER_NAME};

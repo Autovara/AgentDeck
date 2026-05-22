@@ -7,6 +7,7 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
+agentdeck-adapter = { workspace = true }
 agentdeck-core = { workspace = true }
 agentdeck-process = { workspace = true }
 agentdeck-storage = { workspace = true }
