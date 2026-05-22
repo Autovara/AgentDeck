@@ -22,6 +22,7 @@ Workspace layout:
 - `crates/agentdeck-storage` — SQLite schema, migrations, and the `Storage` handle the monitor core uses
 - `crates/agentdeck-adapter` — `Adapter` trait, `AdapterRegistry`, and the per-scan result + diagnostic shapes adapters produce
 - `crates/agentdeck-adapter-aider` — built-in Level 1 adapter for the [Aider](https://aider.chat) CLI (presence-only)
+- `crates/agentdeck-adapter-codex` — built-in Level 1 adapter for the [OpenAI Codex CLI](https://github.com/openai/codex) (presence-only)
 - `crates/agentdeck-adapter-custom` — user-defined Level 1 process matcher (definitions, validation, persistence, runtime adapter)
 - `crates/agentdeck-session` — `SessionStateMachine` and `Session` / `SessionEvent` repository over `sessions` and `session_events`
 - `crates/agentdeck-attention` — rule-based attention engine over `attention_items`, plus `AttentionEngine::apply` / `set_mute` / `resolve`
@@ -150,6 +151,12 @@ The Tauri commands behind the attention surface are `get_attention_report`, `mut
 The adapter is locked to `CapabilityLevel::Presence` per build-plan §10's TUI caveat: Aider is an interactive TUI and we do not yet have a defensible waiting-detection strategy, so the adapter must not surface `waiting_for_input` attention items. The attention engine's existing Level >= `Status` gate enforces this automatically — `AiderAdapter` is registered in `MonitorTickState::run_tick` between the snapshot and the session state machine apply, just like the custom adapter, and its diagnostics flow through `agentdeck-diagnostics::record`.
 
 The unit tests under `crates/agentdeck-adapter-aider/src/lib.rs` cover the matcher (positive cases: bare `aider`, `aider.exe`, absolute-path `cmdline[0]`, `python -m aider[.cli]`, `python3.11 -m aider`, Windows `python.exe C:\\...\\aider`; negative cases: unrelated python and node processes, `pythonista` / `aiderbot` lookalikes, `python -m venv`, pathological `-m` with no following argument) and the `Adapter` trait surface (stable name and level, empty / single / multiple matches, and the diagnostic's `last_scan_time` linking back to the snapshot).
+
+### Codex CLI adapter
+
+`crates/agentdeck-adapter-codex` mirrors the Aider adapter's shape and rationale: the matcher is process-only and the adapter is locked to `CapabilityLevel::Presence` per the §10 TUI caveat. Detection matches when (1) the OS-reported name is `codex` / `codex.exe`, (2) `cmdline[0]`'s basename is `codex` (covers absolute-path invocations), or (3) the process is a `node*` interpreter (`node`, `nodejs`, `.exe` variants) whose positional cmdline arguments include a path whose basename is `codex` (covers direct `node /path/to/codex` invocations that bypass the npm shim). Arguments starting with `-` are skipped so `node` flags like `--enable-source-maps` do not interfere.
+
+`CodexAdapter` is registered in `MonitorTickState::run_tick` immediately after the Aider adapter; built-in adapters always run before the custom adapter so their rows appear first in the diagnostics card. The unit tests under `crates/agentdeck-adapter-codex/src/lib.rs` cover positive matches (bare `codex`, `codex.exe`, absolute-path entrypoints, `node /path/codex`, `node --enable-source-maps /opt/codex/bin/codex`, the Debian `nodejs` alias, Windows backslash paths) and negative matches (unrelated node and python processes, `codex-cli` / `codexbot` / `nodemon` lookalikes, `node` with no script args, `node` with only flag args).
 
 ### Adapter diagnostics
 

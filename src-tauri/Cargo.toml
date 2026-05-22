@@ -21,6 +21,7 @@ tauri-plugin-os = { workspace = true }
 
 agentdeck-adapter = { workspace = true }
 agentdeck-adapter-aider = { workspace = true }
+agentdeck-adapter-codex = { workspace = true }
 agentdeck-adapter-custom = { workspace = true }
 agentdeck-attention = { workspace = true }
 agentdeck-core = { workspace = true }

@@ -38,6 +38,7 @@ use std::sync::Arc;
 
 use agentdeck_adapter::AdapterRegistry;
 use agentdeck_adapter_aider::AiderAdapter;
+use agentdeck_adapter_codex::CodexAdapter;
 use agentdeck_adapter_custom::{CustomAdapterRepository, CustomProcessAdapter};
 use agentdeck_attention::{AttentionEngine, AttentionTickReport};
 use agentdeck_core::{Clock, SystemClock};
@@ -139,6 +140,7 @@ impl MonitorTickState {
         // does not affect the session state machine (each match is
         // keyed by `(adapter_name, pid)`).
         registry.register(Box::new(AiderAdapter::new()));
+        registry.register(Box::new(CodexAdapter::new()));
         registry.register(Box::new(CustomProcessAdapter::from_definitions(
             custom_defs,
         )));
