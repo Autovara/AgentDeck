@@ -1,0 +1,15 @@
+[package]
+name = "agentdeck-adapter-aider"
+description = "Built-in Level 1 adapter for the Aider AI pair-programming CLI. Detects aider processes via argv and emits presence-only matches."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+agentdeck-adapter = { workspace = true }
+agentdeck-process = { workspace = true }
+
+[dev-dependencies]
+agentdeck-core = { workspace = true }
+chrono = { workspace = true }

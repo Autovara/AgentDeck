@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "crates/agentdeck-adapter",
+    "crates/agentdeck-adapter-aider",
     "crates/agentdeck-adapter-custom",
     "crates/agentdeck-attention",
     "crates/agentdeck-core",
@@ -22,6 +23,7 @@ authors = ["AgentDeck contributors"]
 [workspace.dependencies]
 # Internal crates
 agentdeck-adapter = { path = "crates/agentdeck-adapter" }
+agentdeck-adapter-aider = { path = "crates/agentdeck-adapter-aider" }
 agentdeck-adapter-custom = { path = "crates/agentdeck-adapter-custom" }
 agentdeck-attention = { path = "crates/agentdeck-attention" }
 agentdeck-core = { path = "crates/agentdeck-core" }

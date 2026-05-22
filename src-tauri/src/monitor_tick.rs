@@ -9,9 +9,11 @@
 //! The orchestrator owns:
 //!
 //! - an [`AdapterRegistry`] containing every adapter we know how to
-//!   build today. The custom adapter is rebuilt from the current
-//!   `custom_adapters` table contents on every tick (definitions can
-//!   change between ticks).
+//!   build today. Built-in adapters (currently [`AiderAdapter`]) are
+//!   registered as stateless values. The custom adapter is rebuilt
+//!   from the current `custom_adapters` table contents on every tick
+//!   because its definitions can change between ticks (add / remove /
+//!   toggle).
 //! - the [`SessionStateMachine`] that writes `sessions` / `session_events`.
 //! - the [`AttentionEngine`] that writes `attention_items`.
 //!
@@ -35,6 +37,7 @@
 use std::sync::Arc;
 
 use agentdeck_adapter::AdapterRegistry;
+use agentdeck_adapter_aider::AiderAdapter;
 use agentdeck_adapter_custom::{CustomAdapterRepository, CustomProcessAdapter};
 use agentdeck_attention::{AttentionEngine, AttentionTickReport};
 use agentdeck_core::{Clock, SystemClock};
@@ -131,6 +134,11 @@ impl MonitorTickState {
         };
 
         let mut registry = AdapterRegistry::new();
+        // Built-in adapters run before the custom adapter so their
+        // diagnostics rows appear first in the dashboard table. Order
+        // does not affect the session state machine (each match is
+        // keyed by `(adapter_name, pid)`).
+        registry.register(Box::new(AiderAdapter::new()));
         registry.register(Box::new(CustomProcessAdapter::from_definitions(
             custom_defs,
         )));

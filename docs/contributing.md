@@ -21,6 +21,7 @@ Workspace layout:
 - `crates/agentdeck-process` — `SysinfoProcessSource` and the `ProcessScanner` (snapshot + diff over any `ProcessSource`)
 - `crates/agentdeck-storage` — SQLite schema, migrations, and the `Storage` handle the monitor core uses
 - `crates/agentdeck-adapter` — `Adapter` trait, `AdapterRegistry`, and the per-scan result + diagnostic shapes adapters produce
+- `crates/agentdeck-adapter-aider` — built-in Level 1 adapter for the [Aider](https://aider.chat) CLI (presence-only)
 - `crates/agentdeck-adapter-custom` — user-defined Level 1 process matcher (definitions, validation, persistence, runtime adapter)
 - `crates/agentdeck-session` — `SessionStateMachine` and `Session` / `SessionEvent` repository over `sessions` and `session_events`
 - `crates/agentdeck-attention` — rule-based attention engine over `attention_items`, plus `AttentionEngine::apply` / `set_mute` / `resolve`
@@ -141,6 +142,14 @@ To delete every definition during development, drop the database (see "Local SQL
 The monitor-tick orchestrator lives in `src-tauri/src/monitor_tick.rs`. It runs one tick on demand via the `run_monitor_tick` Tauri command: snapshot → registry → `SessionStateMachine::apply` → `AttentionEngine::apply`. The result includes IDs created/updated/completed for sessions and created/updated/resolved/skipped-muted for attention items. The background scheduler that ticks this on a steady cadence lands in a later build step.
 
 The Tauri commands behind the attention surface are `get_attention_report`, `mute_attention_item`, and `resolve_attention_item`.
+
+### Aider adapter
+
+`crates/agentdeck-adapter-aider` ships the alpha's first built-in Level 1 adapter for [Aider](https://aider.chat). The matcher is **process-only** in the alpha: a process is treated as an Aider session when (1) its OS-reported name is `aider`/`aider.exe`, (2) its `cmdline[0]` basename is `aider`, or (3) the process is a `python*` interpreter and `cmdline` contains either `-m aider[.<sub>]` or a script path whose basename is `aider`. False positives are possible if the user has an unrelated script literally named `aider`; the simpler signal is preferred for the alpha because the user can disable the adapter via the dashboard if needed.
+
+The adapter is locked to `CapabilityLevel::Presence` per build-plan §10's TUI caveat: Aider is an interactive TUI and we do not yet have a defensible waiting-detection strategy, so the adapter must not surface `waiting_for_input` attention items. The attention engine's existing Level >= `Status` gate enforces this automatically — `AiderAdapter` is registered in `MonitorTickState::run_tick` between the snapshot and the session state machine apply, just like the custom adapter, and its diagnostics flow through `agentdeck-diagnostics::record`.
+
+The unit tests under `crates/agentdeck-adapter-aider/src/lib.rs` cover the matcher (positive cases: bare `aider`, `aider.exe`, absolute-path `cmdline[0]`, `python -m aider[.cli]`, `python3.11 -m aider`, Windows `python.exe C:\\...\\aider`; negative cases: unrelated python and node processes, `pythonista` / `aiderbot` lookalikes, `python -m venv`, pathological `-m` with no following argument) and the `Adapter` trait surface (stable name and level, empty / single / multiple matches, and the diagnostic's `last_scan_time` linking back to the snapshot).
 
 ### Adapter diagnostics
 

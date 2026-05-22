@@ -19,6 +19,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "agentdeck-adapter-aider"
+version = "0.0.0"
+dependencies = [
+ "agentdeck-adapter",
+ "agentdeck-core",
+ "agentdeck-process",
+ "chrono",
+]
+
+[[package]]
 name = "agentdeck-adapter-custom"
 version = "0.0.0"
 dependencies = [
@@ -41,6 +51,7 @@ name = "agentdeck-app"
 version = "0.0.0"
 dependencies = [
  "agentdeck-adapter",
+ "agentdeck-adapter-aider",
  "agentdeck-adapter-custom",
  "agentdeck-attention",
  "agentdeck-core",
