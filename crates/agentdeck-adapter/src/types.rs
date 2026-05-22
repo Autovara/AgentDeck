@@ -132,6 +132,40 @@ impl Confidence {
     }
 }
 
+/// Cost-data provenance label, mirroring `sessions.cost_kind` and
+/// `usage_records.cost_kind` CHECK constraints.
+///
+/// Level 1 / Level 2 adapters always emit [`CostKind::Unknown`]; Level 3
+/// adapters pick `Exact` when they read a usage figure straight from a
+/// provider artifact, `Estimated` when they derive it from tokens and a
+/// pricing table.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CostKind {
+    Exact,
+    Estimated,
+    Unknown,
+}
+
+impl CostKind {
+    pub const fn as_db_str(self) -> &'static str {
+        match self {
+            Self::Exact => "exact",
+            Self::Estimated => "estimated",
+            Self::Unknown => "unknown",
+        }
+    }
+
+    pub fn from_db_str(s: &str) -> Option<Self> {
+        match s {
+            "exact" => Some(Self::Exact),
+            "estimated" => Some(Self::Estimated),
+            "unknown" => Some(Self::Unknown),
+            _ => None,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -202,5 +236,20 @@ mod tests {
     fn confidence_serde_lowercase() {
         let json = serde_json::to_string(&Confidence::Medium).unwrap();
         assert_eq!(json, "\"medium\"");
+    }
+
+    #[test]
+    fn cost_kind_db_str_round_trip() {
+        for c in [CostKind::Exact, CostKind::Estimated, CostKind::Unknown] {
+            assert_eq!(CostKind::from_db_str(c.as_db_str()), Some(c));
+        }
+        assert_eq!(CostKind::from_db_str(""), None);
+        assert_eq!(CostKind::from_db_str("expensive"), None);
+    }
+
+    #[test]
+    fn cost_kind_serde_lowercase() {
+        let json = serde_json::to_string(&CostKind::Estimated).unwrap();
+        assert_eq!(json, "\"estimated\"");
     }
 }

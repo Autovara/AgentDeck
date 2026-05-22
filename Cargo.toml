@@ -6,6 +6,7 @@ members = [
     "crates/agentdeck-core",
     "crates/agentdeck-harness",
     "crates/agentdeck-process",
+    "crates/agentdeck-session",
     "crates/agentdeck-storage",
     "src-tauri",
 ]
@@ -22,6 +23,7 @@ agentdeck-adapter = { path = "crates/agentdeck-adapter" }
 agentdeck-adapter-custom = { path = "crates/agentdeck-adapter-custom" }
 agentdeck-core = { path = "crates/agentdeck-core" }
 agentdeck-process = { path = "crates/agentdeck-process" }
+agentdeck-session = { path = "crates/agentdeck-session" }
 agentdeck-storage = { path = "crates/agentdeck-storage" }
 
 # General purpose

@@ -29,4 +29,4 @@ mod types;
 pub use adapter::{Adapter, AdapterMatch, AdapterScanResult};
 pub use diagnostics::AdapterDiagnostic;
 pub use registry::{AdapterRegistry, RegistryScanResult};
-pub use types::{CapabilityLevel, Confidence, SessionStatus};
+pub use types::{CapabilityLevel, Confidence, CostKind, SessionStatus};

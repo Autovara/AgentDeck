@@ -99,6 +99,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "agentdeck-session"
+version = "0.0.0"
+dependencies = [
+ "agentdeck-adapter",
+ "agentdeck-core",
+ "agentdeck-storage",
+ "chrono",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "agentdeck-storage"
 version = "0.0.0"
 dependencies = [
