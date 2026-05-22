@@ -22,7 +22,7 @@ const ITEM_COLUMNS: &str = "id, session_id, reason, severity, message, source, c
 const OPEN_WITH_SESSION_SQL: &str = "SELECT \
         a.id, a.session_id, a.reason, a.severity, a.message, a.source, a.confidence, \
         a.recommended_actions, a.created_at, a.resolved_at, a.muted_until, \
-        s.agent_name, s.adapter_name, s.status, s.pid \
+        s.agent_name, s.adapter_name, s.status, s.pid, s.repo_path, s.project_tag \
      FROM attention_items a \
      INNER JOIN sessions s ON s.id = a.session_id \
      WHERE a.resolved_at IS NULL \
@@ -74,6 +74,8 @@ pub(crate) fn list_open_with_session(
             adapter_name: row.get("adapter_name")?,
             status,
             pid,
+            repo_path: row.get("repo_path")?,
+            project_tag: row.get("project_tag")?,
         };
         Ok((item, session))
     })?;

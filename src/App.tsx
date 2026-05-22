@@ -5,6 +5,7 @@ import {
   deleteCustomAdapter,
   getAttentionReport,
   getCustomAdapterReport,
+  getOverviewReport,
   getProcessScannerReport,
   getStorageReport,
   getTraySurface,
@@ -17,15 +18,16 @@ import type {
   AttentionReport,
   CustomAdapterReport,
   NewCustomAdapter,
+  OverviewReport,
   ProcessScannerReport,
   StorageReport,
   TraySurfaceReport,
 } from "./lib/tauri";
-import { TraySurfaceCard } from "./components/TraySurfaceCard";
-import { StorageCard } from "./components/StorageCard";
-import { ProcessScannerCard } from "./components/ProcessScannerCard";
-import { CustomAdaptersCard } from "./components/CustomAdaptersCard";
-import { AttentionCard } from "./components/AttentionCard";
+import { Sidebar } from "./components/Sidebar";
+import type { PageId, SidebarItem } from "./components/Sidebar";
+import { OverviewPage } from "./pages/OverviewPage";
+import { AttentionPage } from "./pages/AttentionPage";
+import { DiagnosticsPage } from "./pages/DiagnosticsPage";
 
 type AsyncState<T> =
   | { kind: "loading" }
@@ -33,6 +35,8 @@ type AsyncState<T> =
   | { kind: "error"; message: string };
 
 export function App(): JSX.Element {
+  const [page, setPage] = useState<PageId>("overview");
+
   const [tray, setTray] = useState<AsyncState<TraySurfaceReport>>({
     kind: "loading",
   });
@@ -50,8 +54,12 @@ export function App(): JSX.Element {
   const [attention, setAttention] = useState<AsyncState<AttentionReport>>({
     kind: "loading",
   });
-  const [ticking, setTicking] = useState(false);
   const [attentionBusy, setAttentionBusy] = useState(false);
+  const [overview, setOverview] = useState<AsyncState<OverviewReport>>({
+    kind: "loading",
+  });
+  const [ticking, setTicking] = useState(false);
+  const [lastTickAt, setLastTickAt] = useState<string | null>(null);
 
   const refreshScanner = useCallback(async (): Promise<void> => {
     setRescanning(true);
@@ -71,6 +79,24 @@ export function App(): JSX.Element {
       setCustom({ kind: "ready", report });
     } catch (err) {
       setCustom({ kind: "error", message: describeError(err) });
+    }
+  }, []);
+
+  const refreshAttention = useCallback(async (): Promise<void> => {
+    try {
+      const report = await getAttentionReport();
+      setAttention({ kind: "ready", report });
+    } catch (err) {
+      setAttention({ kind: "error", message: describeError(err) });
+    }
+  }, []);
+
+  const refreshOverview = useCallback(async (): Promise<void> => {
+    try {
+      const report = await getOverviewReport();
+      setOverview({ kind: "ready", report });
+    } catch (err) {
+      setOverview({ kind: "error", message: describeError(err) });
     }
   }, []);
 
@@ -114,40 +140,34 @@ export function App(): JSX.Element {
     [],
   );
 
-  const refreshAttention = useCallback(async (): Promise<void> => {
-    try {
-      const report = await getAttentionReport();
-      setAttention({ kind: "ready", report });
-    } catch (err) {
-      setAttention({ kind: "error", message: describeError(err) });
-    }
-  }, []);
-
   const handleRunTick = useCallback(async (): Promise<void> => {
     setTicking(true);
     try {
-      await runMonitorTick();
-      await refreshAttention();
-      // The scanner card mirrors the same snapshot, so refresh it too.
-      await refreshScanner();
+      const tickReport = await runMonitorTick();
+      setLastTickAt(tickReport.tickAt);
+      await Promise.all([
+        refreshOverview(),
+        refreshAttention(),
+        refreshScanner(),
+      ]);
     } finally {
       setTicking(false);
     }
-  }, [refreshAttention, refreshScanner]);
+  }, [refreshAttention, refreshOverview, refreshScanner]);
 
   const handleMuteAttention = useCallback(
     async (id: string, hours: number): Promise<void> => {
       setAttentionBusy(true);
       try {
         await muteAttentionItem(id, hours);
-        await refreshAttention();
+        await Promise.all([refreshAttention(), refreshOverview()]);
       } catch (err) {
         setAttention({ kind: "error", message: describeError(err) });
       } finally {
         setAttentionBusy(false);
       }
     },
-    [refreshAttention],
+    [refreshAttention, refreshOverview],
   );
 
   const handleResolveAttention = useCallback(
@@ -155,14 +175,14 @@ export function App(): JSX.Element {
       setAttentionBusy(true);
       try {
         await resolveAttentionItem(id);
-        await refreshAttention();
+        await Promise.all([refreshAttention(), refreshOverview()]);
       } catch (err) {
         setAttention({ kind: "error", message: describeError(err) });
       } finally {
         setAttentionBusy(false);
       }
     },
-    [refreshAttention],
+    [refreshAttention, refreshOverview],
   );
 
   useEffect(() => {
@@ -194,67 +214,123 @@ export function App(): JSX.Element {
     void refreshScanner();
     void refreshCustom();
     void refreshAttention();
+    void refreshOverview();
     return () => {
       cancelled = true;
     };
-  }, [refreshScanner, refreshCustom, refreshAttention]);
+  }, [refreshScanner, refreshCustom, refreshAttention, refreshOverview]);
+
+  const navItems: SidebarItem[] = [
+    {
+      id: "overview",
+      label: "Overview",
+    },
+    {
+      id: "attention",
+      label: "Attention",
+      ...attentionNavBadge(attention),
+    },
+    {
+      id: "diagnostics",
+      label: "Diagnostics",
+      ...diagnosticsNavBadge(storage, tray),
+    },
+  ];
 
   return (
     <div className="app">
-      <header className="app__header">
-        <h1>AgentDeck</h1>
-        <p className="app__subtitle">
-          Local attention board for AI coding agents.
-        </p>
-      </header>
+      <Sidebar
+        items={navItems}
+        activeId={page}
+        onSelect={setPage}
+        refreshing={ticking}
+        onRefresh={() => {
+          void handleRunTick();
+        }}
+        lastTickAt={lastTickAt}
+      />
 
-      <main className="app__main">
-        <TraySurfaceCard state={tray} />
-        <StorageCard state={storage} />
-        <ProcessScannerCard
-          state={scanner}
-          onRescan={() => {
-            void refreshScanner();
-          }}
-          rescanning={rescanning}
-        />
-        <CustomAdaptersCard
-          state={custom}
-          busy={customBusy}
-          onAdd={handleAddCustom}
-          onDelete={handleDeleteCustom}
-          onToggle={handleToggleCustom}
-        />
-        <AttentionCard
-          state={attention}
-          ticking={ticking}
-          busy={attentionBusy}
-          onRunTick={() => {
-            void handleRunTick();
-          }}
-          onMute={(id, hours) => {
-            void handleMuteAttention(id, hours);
-          }}
-          onResolve={(id) => {
-            void handleResolveAttention(id);
-          }}
-        />
-
-        <section className="card card--placeholder">
-          <h2>Active sessions</h2>
-          <p>
-            The dedicated sessions card lands with build-plan §15 step 8.
-            Until then, recent activity is visible through{" "}
-            <em>Run monitor tick</em> and the Attention card above.
-          </p>
-        </section>
+      <main className="app__main" role="main">
+        {page === "overview" && (
+          <OverviewPage
+            state={overview}
+            busy={attentionBusy}
+            onMute={(id, hours) => {
+              void handleMuteAttention(id, hours);
+            }}
+            onResolve={(id) => {
+              void handleResolveAttention(id);
+            }}
+            onOpenAttention={() => setPage("attention")}
+          />
+        )}
+        {page === "attention" && (
+          <AttentionPage
+            state={attention}
+            busy={attentionBusy}
+            onMute={(id, hours) => {
+              void handleMuteAttention(id, hours);
+            }}
+            onResolve={(id) => {
+              void handleResolveAttention(id);
+            }}
+          />
+        )}
+        {page === "diagnostics" && (
+          <DiagnosticsPage
+            tray={tray}
+            storage={storage}
+            scanner={scanner}
+            rescanning={rescanning}
+            onRescan={() => {
+              void refreshScanner();
+            }}
+            custom={custom}
+            customBusy={customBusy}
+            onAddCustom={handleAddCustom}
+            onDeleteCustom={handleDeleteCustom}
+            onToggleCustom={handleToggleCustom}
+          />
+        )}
       </main>
-
-      <footer className="app__footer">
-        <span>Alpha pre-release — not for production use.</span>
-      </footer>
     </div>
   );
+}
+
+function attentionNavBadge(
+  state: AsyncState<AttentionReport>,
+): { badge?: string | null; badgeKind?: "warn" | "bad" | "ok" | "neutral" } {
+  if (state.kind !== "ready") return {};
+  const count = state.report.items.length;
+  if (count === 0) return {};
+  const urgent = state.report.items.filter(
+    (e) => e.item.severity === "urgent",
+  ).length;
+  const warn = state.report.items.filter((e) => e.item.severity === "warn")
+    .length;
+  if (urgent > 0) return { badge: String(count), badgeKind: "bad" };
+  if (warn > 0) return { badge: String(count), badgeKind: "warn" };
+  return { badge: String(count), badgeKind: "neutral" };
+}
+
+function diagnosticsNavBadge(
+  storage: AsyncState<StorageReport>,
+  tray: AsyncState<TraySurfaceReport>,
+): { badge?: string | null; badgeKind?: "warn" | "bad" | "ok" | "neutral" } {
+  if (storage.kind === "ready" && !storage.report.ready) {
+    return { badge: "!", badgeKind: "bad" };
+  }
+  if (
+    storage.kind === "ready" &&
+    storage.report.ready &&
+    storage.report.error != null
+  ) {
+    return { badge: "!", badgeKind: "warn" };
+  }
+  if (tray.kind === "ready" && tray.report.fallbackRequired) {
+    return { badge: "tray", badgeKind: "warn" };
+  }
+  return {};
 }
 
 function describeError(err: unknown): string {

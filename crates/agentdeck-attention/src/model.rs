@@ -96,6 +96,16 @@ pub struct SessionRef {
     pub adapter_name: String,
     pub status: SessionStatus,
     pub pid: Option<u32>,
+    /// `sessions.repo_path` — the inferred repository for this session
+    /// (alpha custom adapter copies it from `cwd`). The dashboard renders
+    /// the last path segment as a short label and uses the full path as
+    /// the cell's tooltip.
+    pub repo_path: Option<String>,
+    /// `sessions.project_tag` — user-assigned tag (build-plan §15 step 18
+    /// will surface a UI for editing this). Always `None` in the alpha
+    /// today; carried through the type so a future page does not need to
+    /// reshape this struct.
+    pub project_tag: Option<String>,
 }
 
 #[cfg(test)]

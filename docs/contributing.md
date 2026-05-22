@@ -139,7 +139,17 @@ To delete every definition during development, drop the database (see "Local SQL
 
 The monitor-tick orchestrator lives in `src-tauri/src/monitor_tick.rs`. It runs one tick on demand via the `run_monitor_tick` Tauri command: snapshot → registry → `SessionStateMachine::apply` → `AttentionEngine::apply`. The result includes IDs created/updated/completed for sessions and created/updated/resolved/skipped-muted for attention items. The background scheduler that ticks this on a steady cadence lands in a later build step.
 
-The "Attention" card on the dashboard surfaces the open items urgent → warn → info, exposes a one-hour mute toggle, and a manual resolve button. The Tauri commands behind it are `get_attention_report`, `mute_attention_item`, and `resolve_attention_item`.
+The Tauri commands behind the attention surface are `get_attention_report`, `mute_attention_item`, and `resolve_attention_item`.
+
+### Dashboard pages
+
+The dashboard is split into three pages, navigable from the left sidebar:
+
+- **Overview** — four summary tiles (active agents, open attention by severity, stalled / waiting, estimated cost today) plus a five-item "recent attention" strip. The page is driven by one Tauri call, `get_overview_report`, which composes the snapshot from `agentdeck-session::list_active` and `AttentionEngine::list_open`. The "estimated cost today" tile shows `—` until cost tracking lands (build-plan §15 step 18).
+- **Attention** — the full open-items list, with severity (urgent / warn / info), reason (every enum value present in the current dataset), and "show muted" filter chips. Filtering is client-side over the same `get_attention_report` payload the Overview strip uses, so the lists never disagree.
+- **Diagnostics** — the existing tray-surface, storage, process-scanner, and custom-adapter cards. The adapter-diagnostics table itself is wired up in a later step.
+
+The "Refresh now" button in the sidebar footer drives `run_monitor_tick` and then refreshes Overview, Attention, and the process scanner in parallel. The button's last-tick timestamp gives users a rough sense of how stale the page is. A scheduled background tick lands in a later build step; until then every dashboard refresh is user-initiated.
 
 ## Code of conduct
 

@@ -15,6 +15,7 @@
 mod attention;
 mod custom_adapter;
 mod monitor_tick;
+mod overview;
 mod process_scanner;
 mod storage;
 mod tray;
@@ -28,6 +29,7 @@ use uuid::Uuid;
 use crate::attention::AttentionReport;
 use crate::custom_adapter::{CustomAdapterReport, CustomAdapterState};
 use crate::monitor_tick::{MonitorTickReport, MonitorTickState};
+use crate::overview::OverviewReport;
 use crate::process_scanner::{ProcessScannerReport, ProcessScannerState};
 use crate::storage::{StorageReport, StorageReportState};
 
@@ -58,6 +60,7 @@ fn build_app() -> tauri::Builder<tauri::Wry> {
             get_attention_report,
             mute_attention_item,
             resolve_attention_item,
+            get_overview_report,
         ])
         .setup(|app| {
             let handle = app.handle().clone();
@@ -204,6 +207,11 @@ fn resolve_attention_item(
 ) -> Result<AttentionItem, String> {
     let uuid = Uuid::parse_str(&id).map_err(|e| format!("invalid uuid {id:?}: {e}"))?;
     attention::resolve(&state, uuid)
+}
+
+#[tauri::command]
+fn get_overview_report(state: tauri::State<'_, MonitorTickState>) -> OverviewReport {
+    overview::snapshot(&state)
 }
 
 fn init_tracing() {

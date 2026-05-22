@@ -290,6 +290,10 @@ export interface AttentionSessionRef {
   adapterName: string;
   status: SessionStatus;
   pid: number | null;
+  /** Repo path inferred from `sessions.repo_path`; nullable. */
+  repoPath: string | null;
+  /** User-assigned project tag; always null in the alpha. */
+  projectTag: string | null;
 }
 
 /** Open attention item + parent session, returned by `get_attention_report`. */
@@ -349,4 +353,29 @@ export async function muteAttentionItem(
 /** Resolve an open attention item manually. */
 export async function resolveAttentionItem(id: string): Promise<AttentionItem> {
   return invoke<AttentionItem>("resolve_attention_item", { id });
+}
+
+/**
+ * Dashboard payload for the Overview page. Mirrors the `OverviewReport`
+ * struct in `src-tauri/src/overview.rs`.
+ */
+export interface OverviewReport {
+  ready: boolean;
+  activeSessions: number;
+  attentionTotal: number;
+  attentionUrgent: number;
+  attentionWarn: number;
+  attentionInfo: number;
+  stalledSessions: number;
+  waitingSessions: number;
+  /** `null` until cost tracking lands in §15 step 18. */
+  estimatedCostToday: number | null;
+  /** Up to 5 open attention items, urgent first. */
+  recentAttention: OpenAttentionEntry[];
+  capturedAt: string;
+  error: string | null;
+}
+
+export async function getOverviewReport(): Promise<OverviewReport> {
+  return invoke<OverviewReport>("get_overview_report");
 }
