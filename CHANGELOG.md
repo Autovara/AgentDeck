@@ -25,7 +25,7 @@ First packaged alpha. Lead validation platform: Linux. macOS and Windows builds 
 - **Telegram.** Bot pairing via single-use 6-character codes, allowlist of paired user ids, read-only commands (`/help`, `/status`, `/agents`, `/attention`, `/session <id>`), `/mute <id> [hours]` with audit, `/stop <id>` with mandatory `STOP <id>` confirmation within 60s and platform-default termination (`SIGTERM` / `taskkill /F /PID`). Per-user rate limit (30/min, burst 10). Bot only contacts `api.telegram.org`.
 - **Packaging.** `.deb` and `.AppImage` artifacts for Linux via `pnpm tauri build`. Declared `.deb` runtime depends on `libwebkit2gtk-4.1-0`, `libgtk-3-0`, `libayatana-appindicator3-1`.
 - **CI.** GitHub Actions workflow runs `cargo build / clippy -D warnings / test --workspace --locked` plus `pnpm typecheck` on Ubuntu against every push and PR.
-- **Documentation.** README, install guide, alpha limitations, adapter capabilities, Telegram setup, privacy, security, contributing.
+- **Documentation.** README (with known-limitations and reporting-issues sections), install guide, adapter capabilities, Telegram setup, privacy, security, contributing.
 
 ### Security
 
@@ -34,4 +34,4 @@ First packaged alpha. Lead validation platform: Linux. macOS and Windows builds 
 
 ### Known limitations
 
-See [`docs/alpha-limitations.md`](docs/alpha-limitations.md).
+See the **Known limitations** section in [`README.md`](README.md).

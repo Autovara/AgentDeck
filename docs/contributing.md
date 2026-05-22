@@ -1,252 +1,152 @@
 # Contributing
 
-> Status: alpha. Last updated for `0.1.0-alpha.1`.
+AgentDeck is a Tauri 2.x desktop app with a React + TypeScript frontend and a Rust backend organised as a Cargo workspace. The lead validation platform is **Linux**; the dev loop also runs on macOS and Windows, and CI keeps both cross-compiling alongside Linux.
 
-This page covers:
-
-- setting up a development environment on Linux (alpha lead) and what's known to also work on macOS / Windows
-- running the dev-time agent harness so you do not need real AI agents to develop adapters
-- the workspace layout and what each crate owns
-- the dashboard pages and the Tauri commands behind them
-- how the monitor tick orchestrator wires everything together
-- conventions for tests, logging, schema migrations, and adapter additions
+This guide covers the dev loop, the workspace shape, and the conventions to follow when changing things. The per-crate design rationale lives in each crate's `lib.rs` documentation — `cargo doc --open` is the source of truth for internals.
 
 ## Development environment
 
-AgentDeck is a Tauri 2.x desktop app with a React + TypeScript frontend and a Rust backend organised as a Cargo workspace.
-
-Workspace layout (16 crates + the Tauri shell + the React frontend):
-
-- `crates/agentdeck-core` — OS-facing trait definitions (`ProcessSource`, `FileWatcher`, `Clock`) and core types
-- `crates/agentdeck-harness` — dev-time replay harness library and CLI
-- `crates/agentdeck-process` — `SysinfoProcessSource` and the `ProcessScanner` (snapshot + diff over any `ProcessSource`)
-- `crates/agentdeck-storage` — SQLite schema, migrations, and the `Storage` handle every domain crate uses
-- `crates/agentdeck-adapter` — `Adapter` trait, `AdapterRegistry`, and the per-scan result + diagnostic shapes adapters produce
-- `crates/agentdeck-adapter-aider` — built-in Level 1 adapter for the [Aider](https://aider.chat) CLI (presence-only)
-- `crates/agentdeck-adapter-codex` — built-in Level 1 adapter for the [OpenAI Codex CLI](https://github.com/openai/codex) (presence-only)
-- `crates/agentdeck-adapter-claude-code` — built-in Level 1 adapter for [Anthropic's Claude Code](https://github.com/anthropics/claude-code) (presence-only)
-- `crates/agentdeck-adapter-custom` — user-defined Level 1 process matcher (definitions, validation, persistence, runtime adapter)
-- `crates/agentdeck-session` — `SessionStateMachine` and `Session` / `SessionEvent` repository over `sessions` and `session_events`
-- `crates/agentdeck-attention` — rule-based attention engine over `attention_items`, plus `AttentionEngine::apply` / `set_mute` / `resolve`
-- `crates/agentdeck-diagnostics` — `record` / `list` over the `adapter_diagnostics` table; persists one row per `adapter_name` per tick (no history)
-- `crates/agentdeck-tags` — `project_tags` CRUD plus per-session tag assignment; deletion cleans up dangling labels in one transaction
-- `crates/agentdeck-export` — CSV (hand-rolled RFC-4180) + JSON serialisation of every session row, used by the Settings → Export card
-- `crates/agentdeck-telegram` — pairing, allowlist, command dispatch (`/help`, `/status`, `/agents`, `/attention`, `/session`, `/mute`, `/stop`), per-user rate limiter, stop confirmation slot, audit + `remote_commands` writes
-- `src-tauri/` — Tauri application shell. Owns the tray probe, the platform stop dispatcher (`kill -TERM` / `taskkill /F /PID`), the monitor-tick orchestrator, the desktop-notification scheduler, and every Tauri command consumed by the dashboard
-- `src/` — React 19 + TypeScript dashboard rendered inside the Tauri webview
-- `fixtures/sessions/` — recorded harness fixtures (redaction is enforced before commit; see `agentdeck-harness::Redactor`)
-
 ### Prerequisites
 
-- Rust stable (install via [rustup](https://rustup.rs))
-- Node.js 20 or newer and [pnpm](https://pnpm.io/) (the repo pins pnpm via `packageManager`)
-- A C linker on your platform:
-  - macOS: Xcode Command Line Tools (`xcode-select --install`)
-  - Windows: the Visual Studio Build Tools (with the C++ workload)
-  - Linux: `sudo apt install build-essential` (Debian/Ubuntu) or distro equivalent
-- On Linux, the Tauri 2.x system libraries:
-  ```bash
-  sudo apt install \
-    libwebkit2gtk-4.1-dev libssl-dev libayatana-appindicator3-dev \
-    librsvg2-dev libxdo-dev libsoup-3.0-dev libgtk-3-dev \
-    patchelf file pkg-config
+- Rust **stable** (install via [rustup](https://rustup.rs)).
+- Node.js **20+** and **pnpm 11** (`packageManager` is pinned in `package.json`).
+- A C linker:
+  - **Linux:** `sudo apt install build-essential` (or distro equivalent)
+  - **macOS:** `xcode-select --install`
+  - **Windows:** Visual Studio Build Tools with the C++ workload
+- **Linux only** — the Tauri 2.x system libraries:
+  ```sh
+  sudo apt install -y \
+      libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev \
+      librsvg2-dev libsoup-3.0-dev libxdo-dev libssl-dev \
+      build-essential pkg-config curl wget file patchelf
   ```
-  Other distributions: install the equivalent WebKitGTK 4.1, GTK 3, libsoup 3, AyatanaAppIndicator 3, and librsvg development packages.
+  Other distros: install the equivalent WebKitGTK 4.1, GTK 3, libsoup 3, AyatanaAppIndicator 3, and librsvg development packages.
 
 ### Common commands
 
-Rust:
+```sh
+# Install Node deps
+pnpm install --frozen-lockfile
 
-- `cargo check --workspace` — type-check every crate
-- `cargo test --workspace` — run unit and integration tests
-- `cargo clippy --workspace --all-targets -- -D warnings` — lint
-- `cargo fmt --all` — format
-- `cargo run --bin agentdeck-harness -- --help` — see harness subcommands
+# Hot-reloading dev loop (Vite on :1420 + Tauri webview)
+pnpm tauri:dev
 
-Frontend:
+# Release bundle for the host OS (.deb + .AppImage on Linux)
+pnpm tauri:build
 
-- `pnpm install` — install Node dependencies
-- `pnpm typecheck` — run `tsc` against both the app and the Vite config
-- `pnpm build` — type-check and produce a production bundle in `dist/`
+# Rust gates
+cargo check --workspace
+cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
+cargo fmt --all
 
-Tauri app:
+# Frontend gates
+pnpm typecheck
+pnpm build
+```
 
-- `pnpm tauri:dev` — start the dev loop. Spawns Vite on `http://localhost:1420` and launches the Tauri webview against it. Rust changes trigger a rebuild and relaunch; React changes hot-reload in place.
-- `pnpm tauri:build` — produce a release bundle for the host OS. Bundling targets are configured in `src-tauri/tauri.conf.json`.
+CI runs the same gates with `--locked` / `--frozen-lockfile`.
 
 ### Logging
 
-Set `AGENTDECK_LOG` to override the default `info` log level for the Tauri shell, e.g.:
+`AGENTDECK_LOG` overrides the default `info` filter for the Tauri shell:
 
-```bash
+```sh
 AGENTDECK_LOG=debug pnpm tauri:dev
+AGENTDECK_LOG=agentdeck_telegram=trace,info pnpm tauri:dev
 ```
 
-The format and target filters follow the `tracing-subscriber` `EnvFilter` syntax.
+Syntax follows `tracing-subscriber`'s `EnvFilter`.
 
-### Tray surface and the dashboard fallback
+### Pointing the dev build at a throwaway database
 
-At startup the Rust shell probes the host environment to decide whether the tray icon will be the primary surface. The result is exposed to the dashboard via the `get_tray_surface` Tauri command and rendered in the "Tray surface" card on the Overview page. When no tray is available (notably stock GNOME without the AppIndicator extension, and some Wayland sessions), AgentDeck opens the dashboard window directly. See `src-tauri/src/tray.rs` for the probe and the per-desktop decision table.
+`AGENTDECK_DATA_DIR` overrides the parent directory for the SQLite database, useful so dev runs don't touch your real one:
 
-### Local SQLite storage
+```sh
+AGENTDECK_DATA_DIR=/tmp/agentdeck-dev pnpm tauri:dev
+```
 
-AgentDeck stores all session, attention, usage, audit, and settings data in a single SQLite database. The path is platform-specific:
+The default paths are:
 
 - macOS: `~/Library/Application Support/AgentDeck/agentdeck.db`
 - Windows: `%APPDATA%\AgentDeck\agentdeck.db`
 - Linux: `$XDG_DATA_HOME/agentdeck/agentdeck.db` (defaults to `~/.local/share/agentdeck/agentdeck.db`)
 
-Set `AGENTDECK_DATA_DIR` to override the parent directory; this is also how the smoke tests and CI runs keep the real user database untouched, e.g.:
+## Workspace layout
 
-```bash
-AGENTDECK_DATA_DIR=/tmp/agentdeck-dev pnpm tauri:dev
-```
+Sixteen internal crates plus the Tauri shell and the React frontend. Each crate's `lib.rs` documents its own contract; this list is a navigation aid.
 
-The shell opens the database during `setup()`, applies all migrations defined in `crates/agentdeck-storage/migrations/`, and configures `journal_mode=WAL`, `synchronous=NORMAL`, and `foreign_keys=ON`. Migrations are immutable once shipped; add new schema changes as a new `NNNN_*.sql` file and register it in `crates/agentdeck-storage/src/schema.rs`.
+| Crate | Owns |
+|---|---|
+| `agentdeck-core` | OS trait definitions (`ProcessSource`, `FileWatcher`, `Clock`) |
+| `agentdeck-harness` | Dev-time replay harness library + CLI; fixture format + redactor |
+| `agentdeck-process` | `SysinfoProcessSource`, `ProcessScanner`, snapshot diffing |
+| `agentdeck-storage` | SQLite schema, migrations, the `Storage` handle |
+| `agentdeck-adapter` | `Adapter` trait, `AdapterRegistry`, per-scan result + diagnostic shapes |
+| `agentdeck-adapter-aider` | Built-in Level 1 adapter for [Aider](https://aider.chat) |
+| `agentdeck-adapter-codex` | Built-in Level 1 adapter for the [Codex CLI](https://github.com/openai/codex) |
+| `agentdeck-adapter-claude-code` | Built-in Level 1 adapter for [Claude Code](https://github.com/anthropics/claude-code) |
+| `agentdeck-adapter-custom` | User-defined Level 1 regex matchers + CRUD |
+| `agentdeck-session` | `SessionStateMachine`, `Session` model, `sessions` + `session_events` |
+| `agentdeck-attention` | `AttentionEngine`, attention rules, `attention_items` |
+| `agentdeck-diagnostics` | `record` / `list` over `adapter_diagnostics` |
+| `agentdeck-tags` | `project_tags` CRUD + per-session tag assignment |
+| `agentdeck-export` | CSV (RFC-4180) + JSON serialisation of session rows |
+| `agentdeck-telegram` | Bot pairing, allowlist, commands, rate limiter, `/stop` confirmation, audit + `remote_commands` |
+| `src-tauri/` | Tauri shell — tray probe, monitor tick orchestrator, platform stop dispatcher, notifications, every Tauri command consumed by the dashboard |
+| `src/` | React 19 + TypeScript dashboard rendered inside the Tauri webview |
 
-To reset a development database, delete the file (and the `.db-wal`, `.db-shm` siblings) at the path above. To inspect it, use any modern SQLite tool — the schema is tagged `STRICT` so the table definitions are self-documenting.
+The Tauri shell deliberately stays thin — it wires the domain crates together; product logic lives in the crates.
 
-### Process scanner
+## Dashboard surfaces
 
-`crates/agentdeck-process` exposes a `ProcessScanner` that wraps any `ProcessSource` (from `agentdeck-core`) and produces wall-clock-stamped snapshots, plus a diff between consecutive snapshots. Production builds use `SysinfoProcessSource`, backed by the [`sysinfo`](https://crates.io/crates/sysinfo) crate with a minimal feature set (`default-features = false, features = ["system"]`). Tests substitute `agentdeck-harness::MockProcessSource` through the same trait.
+Five pages, navigable from the left sidebar:
 
-The Tauri shell currently invokes the scanner on demand from the `get_process_scanner_report` command (rendered as the "Process scanner" card on the dashboard). Once the monitor core lands, that command will read a cached snapshot maintained by a background tick loop instead of calling sysinfo synchronously.
+| Page | Tauri commands | Notes |
+|---|---|---|
+| Overview | `get_overview_report` | Summary tiles + 5 recent attention items. |
+| Attention | `get_attention_report`, `mute_attention_item`, `resolve_attention_item` | Full open-items list with severity / reason filters. |
+| Sessions | `list_sessions`, `assign_session_tag`, `clear_session_tag` | Every session (active + completed) with inline tag dropdown and cost label. |
+| Diagnostics | `get_tray_surface`, `get_storage_report`, `get_process_scanner_report`, `get_custom_adapter_report`, `get_adapter_diagnostics`, `add_custom_adapter`, `delete_custom_adapter`, `set_custom_adapter_enabled` | Read surface + custom adapter CRUD. |
+| Settings | `list_project_tags`, `create_project_tag`, `delete_project_tag`, `export_sessions_csv`, `export_sessions_json`, every `*_telegram*` command | Project tags, export, Telegram pairing. |
 
-The scanner also exposes a lightweight `extract_candidates` helper that surfaces processes whose name or command line contains an alpha agent pattern (`aider`, `codex`, `claude`, `ollama`, `agent`). This is **not** the adapter framework — it exists so the diagnostics card can preview what adapters might see. Adapters will replace it with richer matching (exe path, parent process, file watchers, version probes).
-
-### Custom adapters
-
-`crates/agentdeck-adapter-custom` is the first concrete adapter. It persists user-defined matchers in the `custom_adapters` SQLite table (see migration `0002_custom_adapters.sql`) and, given a `ProcessSnapshot`, returns every process that matches each enabled adapter.
-
-Each definition has a label, an agent name, an enabled flag, an optional colour, an optional notes field, an optional `cost_per_hour_cents` for coarse cost reporting, and one of three match kinds:
-
-- `name` — Rust regex against the process name.
-- `cmdline` — Rust regex against the joined command line (single-space separator).
-- `cwd` — Rust regex against the process's current working directory. Processes without a `cwd` never match.
-
-Custom adapters are deliberately locked to capability **Level 1** (presence detection only). Status, usage, and `/stop` are out of scope; the higher capability levels belong to the native adapters that follow in later build-plan steps.
-
-The "Custom adapters" card on the dashboard exposes list / add / delete / enable / disable. Add and delete flow through the `add_custom_adapter`, `delete_custom_adapter`, and `set_custom_adapter_enabled` Tauri commands; all four also re-run the matcher so the card shows current PID matches without a second round trip.
-
-To delete every definition during development, drop the database (see "Local SQLite storage" above) or open it with any SQLite tool and `DELETE FROM custom_adapters;`.
-
-### Session state machine
-
-`crates/agentdeck-session` owns the `sessions` and `session_events` tables. The state machine consumes the `AdapterMatch` set produced by the registry on every tick and decides, for each `(adapter_name, pid)` pair, whether it creates a new session row or refreshes an existing one. A session is uniquely identified at runtime by `(adapter_name, pid)` among non-completed rows; PIDs of newly-completed sessions are eligible for reuse on the next tick. Any active session not seen in the current match set is marked `completed` immediately (no grace tick in the alpha). The whole apply runs in one SQLite transaction, so an interrupted tick never leaves the database half-written.
-
-### Attention engine
-
-`crates/agentdeck-attention` reads `sessions` (and the `TickReport` from the session state machine) and writes `attention_items`. The rule set is deliberately small in the alpha:
-
-- `rate_limited` → `rate_limit` (severity `warn`)
-- `errored` → `command_failed` (severity `warn`)
-- `stalled` → `stalled_session` (severity `info`)
-- `waiting_for_input` → `waiting_for_input` (severity `info`), **gated to adapter level ≥ `Status`** so Level 1 (presence-only) custom adapters never produce a waiting attention item — see build-plan §10 TUI caveat.
-
-`AttentionEngine::apply(&TickReport, &[Session])` is idempotent: re-running with the same input leaves the row counts unchanged. Severity / message / source / confidence / recommended actions update in place; `created_at` is preserved across updates because the item's age is the moment it first started worrying. When the session completes, or the rule stops firing, the row is resolved (`resolved_at` set). When the user mutes an item (`set_mute(id, Some(until))`), the engine skips updates for that row until the mute expires; the resolve path is unaffected.
-
-The monitor-tick orchestrator lives in `src-tauri/src/monitor_tick.rs`. It runs one tick on demand via the `run_monitor_tick` Tauri command: snapshot → registry → `SessionStateMachine::apply` → `AttentionEngine::apply`. The result includes IDs created/updated/completed for sessions and created/updated/resolved/skipped-muted for attention items. The background scheduler that ticks this on a steady cadence lands in a later build step.
-
-The Tauri commands behind the attention surface are `get_attention_report`, `mute_attention_item`, and `resolve_attention_item`.
-
-### Aider adapter
-
-`crates/agentdeck-adapter-aider` ships the alpha's first built-in Level 1 adapter for [Aider](https://aider.chat). The matcher is **process-only** in the alpha: a process is treated as an Aider session when (1) its OS-reported name is `aider`/`aider.exe`, (2) its `cmdline[0]` basename is `aider`, or (3) the process is a `python*` interpreter and `cmdline` contains either `-m aider[.<sub>]` or a script path whose basename is `aider`. False positives are possible if the user has an unrelated script literally named `aider`; the simpler signal is preferred for the alpha because the user can disable the adapter via the dashboard if needed.
-
-The adapter is locked to `CapabilityLevel::Presence` per build-plan §10's TUI caveat: Aider is an interactive TUI and we do not yet have a defensible waiting-detection strategy, so the adapter must not surface `waiting_for_input` attention items. The attention engine's existing Level >= `Status` gate enforces this automatically — `AiderAdapter` is registered in `MonitorTickState::run_tick` between the snapshot and the session state machine apply, just like the custom adapter, and its diagnostics flow through `agentdeck-diagnostics::record`.
-
-The unit tests under `crates/agentdeck-adapter-aider/src/lib.rs` cover the matcher (positive cases: bare `aider`, `aider.exe`, absolute-path `cmdline[0]`, `python -m aider[.cli]`, `python3.11 -m aider`, Windows `python.exe C:\\...\\aider`; negative cases: unrelated python and node processes, `pythonista` / `aiderbot` lookalikes, `python -m venv`, pathological `-m` with no following argument) and the `Adapter` trait surface (stable name and level, empty / single / multiple matches, and the diagnostic's `last_scan_time` linking back to the snapshot).
-
-### Codex CLI adapter
-
-`crates/agentdeck-adapter-codex` mirrors the Aider adapter's shape and rationale: the matcher is process-only and the adapter is locked to `CapabilityLevel::Presence` per the §10 TUI caveat. Detection matches when (1) the OS-reported name is `codex` / `codex.exe`, (2) `cmdline[0]`'s basename is `codex` (covers absolute-path invocations), or (3) the process is a `node*` interpreter (`node`, `nodejs`, `.exe` variants) whose positional cmdline arguments include a path whose basename is `codex` (covers direct `node /path/to/codex` invocations that bypass the npm shim). Arguments starting with `-` are skipped so `node` flags like `--enable-source-maps` do not interfere.
-
-`CodexAdapter` is registered in `MonitorTickState::run_tick` immediately after the Aider adapter; built-in adapters always run before the custom adapter so their rows appear first in the diagnostics card. The unit tests under `crates/agentdeck-adapter-codex/src/lib.rs` cover positive matches (bare `codex`, `codex.exe`, absolute-path entrypoints, `node /path/codex`, `node --enable-source-maps /opt/codex/bin/codex`, the Debian `nodejs` alias, Windows backslash paths) and negative matches (unrelated node and python processes, `codex-cli` / `codexbot` / `nodemon` lookalikes, `node` with no script args, `node` with only flag args).
-
-### Claude Code adapter
-
-`crates/agentdeck-adapter-claude-code` follows the same pattern. The matcher recognises (1) `name == claude` or `name == claude-code` (with optional `.exe` suffix), (2) `cmdline[0]` whose basename matches either, and (3) `node` / `nodejs` interpreters launching a positional `claude` / `claude-code` script. The two binary names are accepted in parallel per `planning/adapter-feasibility.md` §4.1 — recent Claude Code builds ship as `claude`, but the older `claude-code` name is still in the wild on some installs.
-
-`claude` is more generic than `aider` / `codex`, so the matcher is **strict on basename equality** — `claudette`, `pyclaude`, `claude-bot`, etc. are explicitly excluded by the unit tests. The adapter is locked to Level 1 alongside Aider and Codex. Registered in `MonitorTickState::run_tick` between Codex and the custom adapter.
-
-### Adapter diagnostics
-
-`crates/agentdeck-diagnostics` owns the `adapter_diagnostics` table. The schema (defined in `agentdeck-storage/migrations/0001_initial.sql`) holds at most one row per `adapter_name` — the §17 "keep only the most recent scan per adapter; do not accumulate history" discipline is enforced at the SQL level with `INSERT OR REPLACE` on the `adapter_name` primary key.
-
-`record(&Arc<Storage>, &[AdapterDiagnostic])` runs the whole batch in a single transaction. Adapters absent from the current batch are *not* deleted — their previously recorded row stays so the user can still see the most recent diagnostic for an adapter that did not run this tick. `list(&Arc<Storage>)` returns every row, ordered by `last_scan_time ASC` so stale adapters surface at the top of the dashboard card.
-
-The orchestrator (`src-tauri/src/monitor_tick.rs`) calls `record` immediately after `AdapterRegistry::scan_all` and before the session state machine apply. Persistence is **best-effort**: a failure is logged via `tracing::warn!` but the rest of the tick continues, because an empty diagnostics card is recoverable while a missed session update is not.
-
-The Tauri command behind the card is `get_adapter_diagnostics`; the React `AdapterDiagnosticsCard` renders one table row per adapter with an expandable per-row `<details>` block for data sources, missing permissions, failure reasons, and known limitations. The Diagnostics sidebar item carries a warning badge with the count of adapters that have non-empty `failure_reasons`.
-
-### Dashboard pages
-
-The dashboard is split into five pages, navigable from the left sidebar:
-
-- **Overview** — four summary tiles (active agents, open attention by severity, stalled / waiting, estimated cost today) plus a five-item "recent attention" strip. Driven by one Tauri call (`get_overview_report`).
-- **Attention** — the full open-items list, with severity / reason / "show muted" filter chips. Mute and resolve buttons call `mute_attention_item` / `resolve_attention_item`.
-- **Sessions** — every session AgentDeck has tracked (active + completed), with an inline project-tag dropdown per row, a runtime column, and a cost label. `list_sessions` + `assign_session_tag` / `clear_session_tag`.
-- **Diagnostics** — tray-surface, storage, process-scanner, custom-adapter, and adapter-diagnostics cards. Pure read surface.
-- **Settings** — Project Tags CRUD, Export (CSV + JSON via `tauri-plugin-dialog`'s save dialog), and Telegram pairing. Telegram is disabled by default; see [`telegram-setup.md`](telegram-setup.md).
-
-The "Refresh now" button in the sidebar footer drives `run_monitor_tick` and then refreshes Overview, Attention, Sessions, the process scanner, and adapter diagnostics in parallel. The same tick fires on a 15-second background interval via `tray_scheduler::spawn`; the scheduler also updates the tray menu and sends desktop notifications for newly-created urgent attention items (unless the user toggled Pause Alerts).
-
-### Tray surface
-
-The Linux tray probe lives in `src-tauri/src/tray.rs`. It classifies the desktop environment, optionally checks DBus for `org.kde.StatusNotifierWatcher`, and may attempt `TrayIconBuilder::build` as the only fully reliable test of tray support. When no tray is available (stock GNOME without AppIndicator, some Wayland sessions), the shell opens the dashboard window directly and the scheduler keeps sending desktop notifications. The probe result is rendered in the Diagnostics page's "Tray surface" card.
-
-The tray menu itself is rebuilt from a `TrayMenuSnapshot` on every scheduled tick (`src-tauri/src/tray_menu.rs`). It shows active session count, the top five attention items prefixed by severity (`[!]` / `[w]` / `[i]`), and the four actions Open Dashboard / Refresh / Pause Alerts / Quit. Clicking an attention row opens the dashboard; the dashboard is the place to drill into a specific session.
-
-### Telegram
-
-`crates/agentdeck-telegram` owns the bot lifecycle. The flow:
-
-1. The user enables Telegram from Settings → Telegram pairing, pastes a bot token (saved plaintext in the `settings` table, see [`security.md`](security.md)), and clicks **Generate pairing code**.
-2. The bot is started on a tokio task (`bot::start_bot`). Long-polling against `api.telegram.org` only; no other host is contacted.
-3. The user DMs `PAIR <code>` to the bot; the sender's Telegram user id is added to the allowlist.
-4. Paired users can send `/help`, `/status`, `/agents`, `/attention`, `/session <id>`, `/mute <id> [hours]`, and `/stop <id>` (with `STOP <id>` confirmation within 60s). Free-form text from paired users is silently ignored.
-5. Every sensitive action writes an `audit_log` row; `/stop` additionally writes a `remote_commands` row that transitions `pending → executed | failed`.
-
-Per-user rate limit defaults to **30 commands/min, burst 10**. Pairing itself is not rate-limited.
-
-### Export
-
-The Settings → Export card calls `@tauri-apps/plugin-dialog`'s `save()` to pick a path, then invokes `export_sessions_csv` / `export_sessions_json` (which write to that path via `std::fs::write`). The two formats share the same column set — see `agentdeck-export::COLUMNS` for the canonical order. CSV is hand-rolled per RFC-4180 (commas / quotes / newlines escaped correctly); JSON is `serde_json::to_string_pretty`.
+The "Refresh now" button drives `run_monitor_tick` and then refreshes Overview, Attention, Sessions, the process scanner, and adapter diagnostics in parallel. A 15 s background scheduler (`src-tauri/src/tray_scheduler.rs`) drives the same tick, updates the tray menu, and sends desktop notifications for newly-created urgent attention items.
 
 ## Conventions
 
 ### Tests
 
-Every crate ships unit tests against an in-memory SQLite database (`Storage::open_in_memory()`) or pure-function tests where storage isn't involved. Integration tests live under `crates/*/tests/` and use the same in-memory open. The whole workspace runs in well under a second: `cargo test --workspace --locked` is part of the CI gate.
+- Every crate ships unit and / or integration tests against an in-memory SQLite database (`Storage::open_in_memory()`).
+- Integration tests live under `crates/*/tests/` and use the same in-memory pattern.
+- The whole workspace runs in well under a second: `cargo test --workspace --locked` is part of the CI gate.
 
-When adding a feature that writes to storage, also add an assertion that confirms the SQL CHECK constraints are honoured — the schema has tight enums for `status`, `severity`, `cost_kind`, etc., and a wrong value yields an opaque rusqlite error in production.
+When adding storage writes, assert the SQL `CHECK` constraints are honoured — the schema has tight enums for `status`, `severity`, `cost_kind`, etc., and a wrong value yields an opaque rusqlite error in production.
 
 ### Schema migrations
 
-Migrations are immutable once shipped. Add a new file `crates/agentdeck-storage/migrations/NNNN_short_name.sql`, register it in `crates/agentdeck-storage/src/schema.rs`, and write a regression test under `crates/agentdeck-storage/tests/migrate.rs`. Re-opening a database that already has a higher version is a no-op.
+Migrations are **immutable once shipped**. Add a new file `crates/agentdeck-storage/migrations/NNNN_short_name.sql`, register it in `crates/agentdeck-storage/src/schema.rs`, and write a regression test under `crates/agentdeck-storage/tests/migrate.rs`. Re-opening a database that already has a higher version is a no-op.
 
-### Adding a new built-in adapter
+### Adding a built-in adapter
 
 1. New crate `agentdeck-adapter-<name>` modelled on `agentdeck-adapter-codex` (single-file `lib.rs`, ~450 LOC including tests).
-2. `impl Adapter for FooAdapter`: stable lower-case `name()`, fixed `capability_level()`, pure `scan()` producing `AdapterMatch` per detected process and a fresh `AdapterDiagnostic`.
-3. Register the adapter in `src-tauri/src/monitor_tick.rs` (`registry.register(Box::new(FooAdapter::new()))`). Built-in adapters run before the custom adapter so their rows appear first in the diagnostics card.
-4. Pin the matcher's behaviour with unit tests covering common positive and negative cases (binary name, `cmdline[0]` basename, interpreter-launched variants, lookalikes that must not match).
+2. `impl Adapter for FooAdapter`: stable lower-case `name()`, fixed `capability_level()`, pure `scan()` producing one `AdapterMatch` per detected process plus a fresh `AdapterDiagnostic`.
+3. Register the adapter in `src-tauri/src/monitor_tick.rs` (`registry.register(Box::new(FooAdapter::new()))`). Built-in adapters always run before the custom adapter so their rows appear first in the diagnostics card.
+4. Cover the matcher's contract with unit tests: positive matches across binary-name, absolute-path cmdline, and interpreter-launched variants; negative matches for lookalikes that must not trigger.
 
-Custom adapters need no code change — they're configured at runtime from the dashboard.
+Custom adapters need no code change — they're configured at runtime from the Diagnostics page.
 
-### Logging
+### Capability levels and the attention engine
 
-Set `AGENTDECK_LOG` to override the default `info` log level for the Tauri shell, e.g.:
+The attention engine **gates** `waiting_for_input` items to adapters at `CapabilityLevel::Status` or higher. Level 1 adapters never produce a waiting-for-input attention item, even if `AdapterMatch.status` happens to claim that — the gate is in `agentdeck-attention::rules`. When promoting an adapter to Level 2, the gate flips automatically; no engine change required. See [`adapter-capabilities.md`](adapter-capabilities.md) for the full level matrix.
 
-```bash
-AGENTDECK_LOG=debug pnpm tauri:dev
-```
+### Cost data
 
-The format and target filters follow the `tracing-subscriber` `EnvFilter` syntax. Set `AGENTDECK_LOG=agentdeck_telegram=trace,info` to crank the Telegram bot to trace while keeping the rest at info.
+Each `AdapterMatch` carries `cost_per_hour_cents: Option<i64>`. When `Some`, the session state machine writes `estimated_cost = rate × elapsed / 3600 / 100` on every tick and labels it `cost_kind = estimated`. Built-in adapters declare `None` in the alpha; only the custom adapter currently populates a real rate (from its `cost_per_hour_cents` column).
 
 ## Code of conduct
 
-To be filled before the repo goes public. Contact the maintainers via GitHub issues for now.
+To be filled before the repo goes public. For now, please report concerns via GitHub issues.
 
 ## Issue and pull request templates
 

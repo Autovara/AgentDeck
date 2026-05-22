@@ -1,8 +1,8 @@
 # Installing the AgentDeck alpha
 
-AgentDeck's alpha ships as **Linux-only** `.deb` and `.AppImage` artifacts. macOS and Windows builds arrive at beta — see [`alpha-limitations.md`](alpha-limitations.md).
+AgentDeck's alpha ships as **Linux-only** `.deb` and `.AppImage` artifacts. macOS and Windows builds arrive at beta.
 
-The alpha binaries are **unsigned**. Linux does not have a Gatekeeper-equivalent prompt, but your distro will refuse the install if the dependency list is not satisfied; the lists below should keep that simple.
+The alpha binaries are **unsigned**. Linux does not have a Gatekeeper-equivalent prompt, but your distro will refuse the install if the dependency list is not satisfied; the lists below should keep that simple. Verify the SHA-256 of the downloaded artifact against the release page checksum before installing.
 
 ## Producing the artifacts
 
@@ -80,7 +80,7 @@ On first launch AgentDeck creates its database under the per-OS app data directo
 
 The data directory is recreated automatically if you delete it; you'll lose any saved Telegram tokens, paired users, and session history.
 
-If the tray surface isn't available on your desktop (stock GNOME without the AppIndicator extension, some Wayland sessions), AgentDeck falls back to opening the dashboard window directly — see [`adapter-capabilities.md`](adapter-capabilities.md) and the Diagnostics page in the app for what AgentDeck detected.
+If the tray surface isn't available on your desktop (stock GNOME without the AppIndicator extension, some Wayland sessions), AgentDeck falls back to opening the dashboard window directly. The Diagnostics page in the app shows what AgentDeck detected.
 
 ## Reporting build issues
 
