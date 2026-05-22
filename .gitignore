@@ -19,7 +19,7 @@ out/
 # Rust / Tauri
 target/
 src-tauri/target/
-src-tauri/gen/schemas/
+src-tauri/gen/
 src-tauri/WixTools/
 
 # Tauri signing material — never commit
