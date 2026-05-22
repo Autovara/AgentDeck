@@ -259,6 +259,11 @@ a {
   color: var(--warn);
 }
 
+.pill--bad {
+  background: rgba(196, 35, 35, 0.15);
+  color: #c42323;
+}
+
 .kv {
   display: grid;
   grid-template-columns: max-content 1fr;

@@ -1,8 +1,6 @@
 //! In-memory shapes for the `sessions` and `session_events` tables.
 
-use agentdeck_adapter::{
-    AdapterMatch, CapabilityLevel, Confidence, CostKind, SessionStatus,
-};
+use agentdeck_adapter::{AdapterMatch, CapabilityLevel, Confidence, CostKind, SessionStatus};
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 use serde_json::json;

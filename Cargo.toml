@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/agentdeck-adapter",
     "crates/agentdeck-adapter-custom",
+    "crates/agentdeck-attention",
     "crates/agentdeck-core",
     "crates/agentdeck-harness",
     "crates/agentdeck-process",
@@ -21,6 +22,7 @@ authors = ["AgentDeck contributors"]
 # Internal crates
 agentdeck-adapter = { path = "crates/agentdeck-adapter" }
 agentdeck-adapter-custom = { path = "crates/agentdeck-adapter-custom" }
+agentdeck-attention = { path = "crates/agentdeck-attention" }
 agentdeck-core = { path = "crates/agentdeck-core" }
 agentdeck-process = { path = "crates/agentdeck-process" }
 agentdeck-session = { path = "crates/agentdeck-session" }

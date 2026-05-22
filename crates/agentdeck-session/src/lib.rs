@@ -40,9 +40,24 @@ mod repository;
 mod state_machine;
 mod timestamp;
 
+use std::sync::Arc;
+
+use agentdeck_storage::Storage;
+
 pub use error::SessionError;
 pub use model::{
     detected_event_payload, status_changed_event_payload, Session, SessionEvent,
     EVENT_KIND_DETECTED, EVENT_KIND_PROCESS_EXITED, EVENT_KIND_STATUS_CHANGED,
 };
 pub use state_machine::{SessionStateMachine, StatusChange, TickReport};
+
+/// Read every non-completed session from the database, oldest first.
+///
+/// Equivalent to the lookup the state machine performs at the start of
+/// each tick, exposed so the monitor core can feed the session list to
+/// the attention engine without duplicating SQL.
+pub fn list_active(storage: &Arc<Storage>) -> Result<Vec<Session>, SessionError> {
+    storage
+        .with_conn(repository::list_active)
+        .map_err(SessionError::from)
+}

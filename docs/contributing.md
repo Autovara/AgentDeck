@@ -20,8 +20,11 @@ Workspace layout:
 - `crates/agentdeck-harness` — dev-time replay harness library and CLI
 - `crates/agentdeck-process` — `SysinfoProcessSource` and the `ProcessScanner` (snapshot + diff over any `ProcessSource`)
 - `crates/agentdeck-storage` — SQLite schema, migrations, and the `Storage` handle the monitor core uses
-- `crates/agentdeck-adapter-custom` — user-defined Level 1 process matcher (definitions, validation, persistence, and matcher)
-- `src-tauri/` — Tauri application shell, tray detection, storage bootstrap, process scanner wiring, custom-adapter wiring, and the Tauri commands consumed by the dashboard
+- `crates/agentdeck-adapter` — `Adapter` trait, `AdapterRegistry`, and the per-scan result + diagnostic shapes adapters produce
+- `crates/agentdeck-adapter-custom` — user-defined Level 1 process matcher (definitions, validation, persistence, runtime adapter)
+- `crates/agentdeck-session` — `SessionStateMachine` and `Session` / `SessionEvent` repository over `sessions` and `session_events`
+- `crates/agentdeck-attention` — rule-based attention engine over `attention_items`, plus `AttentionEngine::apply` / `set_mute` / `resolve`
+- `src-tauri/` — Tauri application shell, tray detection, storage bootstrap, process scanner wiring, custom-adapter wiring, the monitor-tick orchestrator, and the Tauri commands consumed by the dashboard
 - `src/` — React 19 + TypeScript dashboard rendered inside the Tauri webview
 - `fixtures/sessions/` — recorded harness fixtures
 
@@ -118,6 +121,25 @@ Custom adapters are deliberately locked to capability **Level 1** (presence dete
 The "Custom adapters" card on the dashboard exposes list / add / delete / enable / disable. Add and delete flow through the `add_custom_adapter`, `delete_custom_adapter`, and `set_custom_adapter_enabled` Tauri commands; all four also re-run the matcher so the card shows current PID matches without a second round trip.
 
 To delete every definition during development, drop the database (see "Local SQLite storage" above) or open it with any SQLite tool and `DELETE FROM custom_adapters;`.
+
+### Session state machine
+
+`crates/agentdeck-session` owns the `sessions` and `session_events` tables. The state machine consumes the `AdapterMatch` set produced by the registry on every tick and decides, for each `(adapter_name, pid)` pair, whether it creates a new session row or refreshes an existing one. A session is uniquely identified at runtime by `(adapter_name, pid)` among non-completed rows; PIDs of newly-completed sessions are eligible for reuse on the next tick. Any active session not seen in the current match set is marked `completed` immediately (no grace tick in the alpha). The whole apply runs in one SQLite transaction, so an interrupted tick never leaves the database half-written.
+
+### Attention engine
+
+`crates/agentdeck-attention` reads `sessions` (and the `TickReport` from the session state machine) and writes `attention_items`. The rule set is deliberately small in the alpha:
+
+- `rate_limited` → `rate_limit` (severity `warn`)
+- `errored` → `command_failed` (severity `warn`)
+- `stalled` → `stalled_session` (severity `info`)
+- `waiting_for_input` → `waiting_for_input` (severity `info`), **gated to adapter level ≥ `Status`** so Level 1 (presence-only) custom adapters never produce a waiting attention item — see build-plan §10 TUI caveat.
+
+`AttentionEngine::apply(&TickReport, &[Session])` is idempotent: re-running with the same input leaves the row counts unchanged. Severity / message / source / confidence / recommended actions update in place; `created_at` is preserved across updates because the item's age is the moment it first started worrying. When the session completes, or the rule stops firing, the row is resolved (`resolved_at` set). When the user mutes an item (`set_mute(id, Some(until))`), the engine skips updates for that row until the mute expires; the resolve path is unaffected.
+
+The monitor-tick orchestrator lives in `src-tauri/src/monitor_tick.rs`. It runs one tick on demand via the `run_monitor_tick` Tauri command: snapshot → registry → `SessionStateMachine::apply` → `AttentionEngine::apply`. The result includes IDs created/updated/completed for sessions and created/updated/resolved/skipped-muted for attention items. The background scheduler that ticks this on a steady cadence lands in a later build step.
+
+The "Attention" card on the dashboard surfaces the open items urgent → warn → info, exposes a one-hour mute toggle, and a manual resolve button. The Tauri commands behind it are `get_attention_report`, `mute_attention_item`, and `resolve_attention_item`.
 
 ## Code of conduct
 

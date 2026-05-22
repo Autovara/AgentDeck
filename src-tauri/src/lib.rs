@@ -12,17 +12,22 @@
 //! will own all state. This shell simply wires the UI surface to the core
 //! through Tauri commands and events.
 
+mod attention;
 mod custom_adapter;
+mod monitor_tick;
 mod process_scanner;
 mod storage;
 mod tray;
 
 use agentdeck_adapter_custom::NewCustomAdapter;
+use agentdeck_attention::AttentionItem;
 use tauri::Manager;
 use tray::{TraySurfaceReport, TraySurfaceState};
 use uuid::Uuid;
 
+use crate::attention::AttentionReport;
 use crate::custom_adapter::{CustomAdapterReport, CustomAdapterState};
+use crate::monitor_tick::{MonitorTickReport, MonitorTickState};
 use crate::process_scanner::{ProcessScannerReport, ProcessScannerState};
 use crate::storage::{StorageReport, StorageReportState};
 
@@ -49,6 +54,10 @@ fn build_app() -> tauri::Builder<tauri::Wry> {
             add_custom_adapter,
             delete_custom_adapter,
             set_custom_adapter_enabled,
+            run_monitor_tick,
+            get_attention_report,
+            mute_attention_item,
+            resolve_attention_item,
         ])
         .setup(|app| {
             let handle = app.handle().clone();
@@ -58,7 +67,8 @@ fn build_app() -> tauri::Builder<tauri::Wry> {
             app.manage(StorageReportState::new(storage_report));
 
             app.manage(ProcessScannerState::new());
-            app.manage(CustomAdapterState::new(storage_handle));
+            app.manage(CustomAdapterState::new(storage_handle.clone()));
+            app.manage(MonitorTickState::new(storage_handle));
 
             let report = tray::probe(&handle);
 
@@ -162,6 +172,38 @@ fn set_custom_adapter_enabled(
 ) -> Result<CustomAdapterReport, String> {
     let uuid = Uuid::parse_str(&id).map_err(|e| format!("invalid uuid {id:?}: {e}"))?;
     state.set_enabled(uuid, enabled, &scanner)
+}
+
+#[tauri::command]
+fn run_monitor_tick(
+    state: tauri::State<'_, MonitorTickState>,
+    scanner: tauri::State<'_, ProcessScannerState>,
+) -> MonitorTickReport {
+    state.run_tick(&scanner)
+}
+
+#[tauri::command]
+fn get_attention_report(state: tauri::State<'_, MonitorTickState>) -> AttentionReport {
+    attention::snapshot(&state)
+}
+
+#[tauri::command]
+fn mute_attention_item(
+    id: String,
+    hours: i64,
+    state: tauri::State<'_, MonitorTickState>,
+) -> Result<AttentionItem, String> {
+    let uuid = Uuid::parse_str(&id).map_err(|e| format!("invalid uuid {id:?}: {e}"))?;
+    attention::mute(&state, uuid, hours)
+}
+
+#[tauri::command]
+fn resolve_attention_item(
+    id: String,
+    state: tauri::State<'_, MonitorTickState>,
+) -> Result<AttentionItem, String> {
+    let uuid = Uuid::parse_str(&id).map_err(|e| format!("invalid uuid {id:?}: {e}"))?;
+    attention::resolve(&state, uuid)
 }
 
 fn init_tracing() {

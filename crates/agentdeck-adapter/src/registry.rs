@@ -215,10 +215,7 @@ mod tests {
         assert_eq!(d.detected_count, 0);
         assert_eq!(d.capability_level, CapabilityLevel::Status);
         assert_eq!(d.confidence, Confidence::Unknown);
-        assert!(d
-            .known_limitations
-            .iter()
-            .any(|l| l.contains("disabled")));
+        assert!(d.known_limitations.iter().any(|l| l.contains("disabled")));
     }
 
     #[test]

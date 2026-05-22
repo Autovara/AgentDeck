@@ -40,9 +40,12 @@ dependencies = [
 name = "agentdeck-app"
 version = "0.0.0"
 dependencies = [
+ "agentdeck-adapter",
  "agentdeck-adapter-custom",
+ "agentdeck-attention",
  "agentdeck-core",
  "agentdeck-process",
+ "agentdeck-session",
  "agentdeck-storage",
  "anyhow",
  "chrono",
@@ -59,6 +62,24 @@ dependencies = [
  "tracing-subscriber",
  "uuid",
  "zbus",
+]
+
+[[package]]
+name = "agentdeck-attention"
+version = "0.0.0"
+dependencies = [
+ "agentdeck-adapter",
+ "agentdeck-core",
+ "agentdeck-session",
+ "agentdeck-storage",
+ "chrono",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 1.0.69",
+ "tracing",
+ "uuid",
 ]
 
 [[package]]

@@ -5,9 +5,7 @@
 //! calls for a single tick inside one transaction and translates the
 //! storage-level errors into [`crate::SessionError`] at its boundary.
 
-use agentdeck_adapter::{
-    AdapterMatch, CapabilityLevel, Confidence, CostKind, SessionStatus,
-};
+use agentdeck_adapter::{AdapterMatch, CapabilityLevel, Confidence, CostKind, SessionStatus};
 use chrono::{DateTime, Utc};
 use rusqlite::{params, types::Type, Connection, Error as SqlError, Row};
 use uuid::Uuid;
@@ -146,14 +144,12 @@ pub(crate) fn append_event(
 
 fn session_from_row(row: &Row<'_>) -> rusqlite::Result<Session> {
     let id_str: String = row.get("id")?;
-    let id = Uuid::parse_str(&id_str).map_err(|err| {
-        SqlError::FromSqlConversionFailure(0, Type::Text, Box::new(err))
-    })?;
+    let id = Uuid::parse_str(&id_str)
+        .map_err(|err| SqlError::FromSqlConversionFailure(0, Type::Text, Box::new(err)))?;
 
     let adapter_level_int: i64 = row.get("adapter_level")?;
-    let adapter_level_u8 = u8::try_from(adapter_level_int).map_err(|err| {
-        SqlError::FromSqlConversionFailure(0, Type::Integer, Box::new(err))
-    })?;
+    let adapter_level_u8 = u8::try_from(adapter_level_int)
+        .map_err(|err| SqlError::FromSqlConversionFailure(0, Type::Integer, Box::new(err)))?;
     let adapter_level = CapabilityLevel::from_u8(adapter_level_u8).ok_or_else(|| {
         SqlError::FromSqlConversionFailure(
             0,
@@ -182,17 +178,16 @@ fn session_from_row(row: &Row<'_>) -> rusqlite::Result<Session> {
     })?;
 
     let status_confidence_str: String = row.get("status_confidence")?;
-    let status_confidence =
-        Confidence::from_db_str(&status_confidence_str).ok_or_else(|| {
-            SqlError::FromSqlConversionFailure(
-                0,
-                Type::Text,
-                Box::new(std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    format!("unknown status_confidence {status_confidence_str:?}"),
-                )),
-            )
-        })?;
+    let status_confidence = Confidence::from_db_str(&status_confidence_str).ok_or_else(|| {
+        SqlError::FromSqlConversionFailure(
+            0,
+            Type::Text,
+            Box::new(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("unknown status_confidence {status_confidence_str:?}"),
+            )),
+        )
+    })?;
 
     let cost_kind_str: String = row.get("cost_kind")?;
     let cost_kind = CostKind::from_db_str(&cost_kind_str).ok_or_else(|| {
@@ -227,9 +222,7 @@ fn session_from_row(row: &Row<'_>) -> rusqlite::Result<Session> {
         attention_reason: row.get("attention_reason")?,
         start_time: parse_ts(&start_time_str)?,
         last_seen_time: parse_ts(&last_seen_time_str)?,
-        last_activity_time: last_activity_time_str
-            .map(|s| parse_ts(&s))
-            .transpose()?,
+        last_activity_time: last_activity_time_str.map(|s| parse_ts(&s)).transpose()?,
         estimated_cost: row.get("estimated_cost")?,
         cost_kind,
         created_at: parse_ts(&created_at_str)?,

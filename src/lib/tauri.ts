@@ -218,3 +218,135 @@ export async function setCustomAdapterEnabled(
     enabled,
   });
 }
+
+/**
+ * Severity tier on an attention item. Mirrors `AttentionSeverity` in
+ * `crates/agentdeck-attention/src/severity.rs` and the `attention_items.severity`
+ * SQL CHECK constraint.
+ */
+export type AttentionSeverity = "info" | "warn" | "urgent";
+
+/**
+ * Reason an attention item exists. Mirrors `AttentionReason` in
+ * `crates/agentdeck-attention/src/reason.rs`.
+ */
+export type AttentionReason =
+  | "waiting_for_input"
+  | "approval_required"
+  | "rate_limit"
+  | "authentication_required"
+  | "context_limit"
+  | "stalled_session"
+  | "command_failed"
+  | "process_crashed"
+  | "budget_threshold";
+
+/**
+ * Action AgentDeck suggests for an attention item. Mirrors
+ * `RecommendedAction` in `crates/agentdeck-attention/src/action.rs`.
+ */
+export type RecommendedAction =
+  | "open_dashboard"
+  | "mute"
+  | "stop"
+  | "notify_later";
+
+/** Confidence label shared by sessions and attention items. */
+export type AttentionConfidence = "high" | "medium" | "low" | "unknown";
+
+/** Session status the engine joins with each attention item. */
+export type SessionStatus =
+  | "running"
+  | "idle"
+  | "waiting_for_input"
+  | "rate_limited"
+  | "stalled"
+  | "errored"
+  | "completed"
+  | "unknown";
+
+/**
+ * One row from `attention_items`. Mirrors
+ * `agentdeck_attention::AttentionItem`.
+ */
+export interface AttentionItem {
+  id: string;
+  sessionId: string;
+  reason: AttentionReason;
+  severity: AttentionSeverity;
+  message: string;
+  source: string;
+  confidence: AttentionConfidence;
+  recommendedActions: RecommendedAction[];
+  createdAt: string;
+  resolvedAt: string | null;
+  mutedUntil: string | null;
+}
+
+/** Session label joined to an open attention item. */
+export interface AttentionSessionRef {
+  id: string;
+  agentName: string;
+  adapterName: string;
+  status: SessionStatus;
+  pid: number | null;
+}
+
+/** Open attention item + parent session, returned by `get_attention_report`. */
+export interface OpenAttentionEntry {
+  item: AttentionItem;
+  session: AttentionSessionRef;
+}
+
+/** Dashboard payload for the "Attention" card. */
+export interface AttentionReport {
+  ready: boolean;
+  items: OpenAttentionEntry[];
+  capturedAt: string;
+  error: string | null;
+}
+
+/**
+ * Payload returned by `run_monitor_tick`. The shell drives this on demand
+ * today; a future build step turns it into a background loop.
+ */
+export interface MonitorTickReport {
+  ready: boolean;
+  tickAt: string;
+  snapshotTime: string;
+  adapterMatches: number;
+  sessionsCreated: string[];
+  sessionsUpdated: string[];
+  sessionsCompleted: string[];
+  attentionCreated: string[];
+  attentionUpdated: string[];
+  attentionResolved: string[];
+  attentionSkippedMuted: string[];
+  error: string | null;
+}
+
+/** Drive one full monitor tick. */
+export async function runMonitorTick(): Promise<MonitorTickReport> {
+  return invoke<MonitorTickReport>("run_monitor_tick");
+}
+
+/** Read the current open attention items without driving a tick. */
+export async function getAttentionReport(): Promise<AttentionReport> {
+  return invoke<AttentionReport>("get_attention_report");
+}
+
+/**
+ * Mute an open attention item for `hours` (rounded to integer hours).
+ * Pass `0` to clear an existing mute.
+ */
+export async function muteAttentionItem(
+  id: string,
+  hours: number,
+): Promise<AttentionItem> {
+  return invoke<AttentionItem>("mute_attention_item", { id, hours });
+}
+
+/** Resolve an open attention item manually. */
+export async function resolveAttentionItem(id: string): Promise<AttentionItem> {
+  return invoke<AttentionItem>("resolve_attention_item", { id });
+}

@@ -141,13 +141,7 @@ impl SessionStateMachine {
             // so the active set stays clean.
             for session in &pidless_active {
                 repository::mark_completed(&tx, session.id, now)?;
-                repository::append_event(
-                    &tx,
-                    session.id,
-                    EVENT_KIND_PROCESS_EXITED,
-                    None,
-                    now,
-                )?;
+                repository::append_event(&tx, session.id, EVENT_KIND_PROCESS_EXITED, None, now)?;
                 report.completed.push(session.id);
                 tracing::warn!(
                     session_id = %session.id,

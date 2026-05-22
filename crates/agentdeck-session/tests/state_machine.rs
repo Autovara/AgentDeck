@@ -10,8 +10,7 @@ use std::sync::{Arc, Mutex};
 use agentdeck_adapter::{AdapterMatch, CapabilityLevel, Confidence, SessionStatus};
 use agentdeck_core::Clock;
 use agentdeck_session::{
-    SessionStateMachine, EVENT_KIND_DETECTED, EVENT_KIND_PROCESS_EXITED,
-    EVENT_KIND_STATUS_CHANGED,
+    SessionStateMachine, EVENT_KIND_DETECTED, EVENT_KIND_PROCESS_EXITED, EVENT_KIND_STATUS_CHANGED,
 };
 use agentdeck_storage::Storage;
 use chrono::{DateTime, Duration, TimeZone, Utc};
@@ -44,7 +43,13 @@ fn t(s: i64) -> DateTime<Utc> {
     Utc.with_ymd_and_hms(2026, 5, 22, 13, 0, 0).unwrap() + Duration::seconds(s)
 }
 
-fn make_match(adapter: &str, pid: u32, agent: &str, status: SessionStatus, snapshot: DateTime<Utc>) -> AdapterMatch {
+fn make_match(
+    adapter: &str,
+    pid: u32,
+    agent: &str,
+    status: SessionStatus,
+    snapshot: DateTime<Utc>,
+) -> AdapterMatch {
     AdapterMatch {
         adapter_name: adapter.into(),
         agent_name: agent.into(),
@@ -194,7 +199,13 @@ fn status_change_emits_status_changed_event() {
     let id = first.created[0];
 
     clock.advance(30);
-    let m2 = make_match("custom", 100, "aider", SessionStatus::WaitingForInput, t(30));
+    let m2 = make_match(
+        "custom",
+        100,
+        "aider",
+        SessionStatus::WaitingForInput,
+        t(30),
+    );
     let report = sm.apply(t(30), &[m2]).expect("apply second");
 
     assert_eq!(report.updated, vec![id]);

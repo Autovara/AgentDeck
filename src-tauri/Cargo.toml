@@ -19,9 +19,12 @@ tauri-plugin-dialog = { workspace = true }
 tauri-plugin-notification = { workspace = true }
 tauri-plugin-os = { workspace = true }
 
+agentdeck-adapter = { workspace = true }
 agentdeck-adapter-custom = { workspace = true }
+agentdeck-attention = { workspace = true }
 agentdeck-core = { workspace = true }
 agentdeck-process = { workspace = true }
+agentdeck-session = { workspace = true }
 agentdeck-storage = { workspace = true }
 
 serde = { workspace = true }

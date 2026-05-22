@@ -3,13 +3,18 @@ import type { JSX } from "react";
 import {
   addCustomAdapter,
   deleteCustomAdapter,
+  getAttentionReport,
   getCustomAdapterReport,
   getProcessScannerReport,
   getStorageReport,
   getTraySurface,
+  muteAttentionItem,
+  resolveAttentionItem,
+  runMonitorTick,
   setCustomAdapterEnabled,
 } from "./lib/tauri";
 import type {
+  AttentionReport,
   CustomAdapterReport,
   NewCustomAdapter,
   ProcessScannerReport,
@@ -20,6 +25,7 @@ import { TraySurfaceCard } from "./components/TraySurfaceCard";
 import { StorageCard } from "./components/StorageCard";
 import { ProcessScannerCard } from "./components/ProcessScannerCard";
 import { CustomAdaptersCard } from "./components/CustomAdaptersCard";
+import { AttentionCard } from "./components/AttentionCard";
 
 type AsyncState<T> =
   | { kind: "loading" }
@@ -41,6 +47,11 @@ export function App(): JSX.Element {
     kind: "loading",
   });
   const [customBusy, setCustomBusy] = useState(false);
+  const [attention, setAttention] = useState<AsyncState<AttentionReport>>({
+    kind: "loading",
+  });
+  const [ticking, setTicking] = useState(false);
+  const [attentionBusy, setAttentionBusy] = useState(false);
 
   const refreshScanner = useCallback(async (): Promise<void> => {
     setRescanning(true);
@@ -103,6 +114,57 @@ export function App(): JSX.Element {
     [],
   );
 
+  const refreshAttention = useCallback(async (): Promise<void> => {
+    try {
+      const report = await getAttentionReport();
+      setAttention({ kind: "ready", report });
+    } catch (err) {
+      setAttention({ kind: "error", message: describeError(err) });
+    }
+  }, []);
+
+  const handleRunTick = useCallback(async (): Promise<void> => {
+    setTicking(true);
+    try {
+      await runMonitorTick();
+      await refreshAttention();
+      // The scanner card mirrors the same snapshot, so refresh it too.
+      await refreshScanner();
+    } finally {
+      setTicking(false);
+    }
+  }, [refreshAttention, refreshScanner]);
+
+  const handleMuteAttention = useCallback(
+    async (id: string, hours: number): Promise<void> => {
+      setAttentionBusy(true);
+      try {
+        await muteAttentionItem(id, hours);
+        await refreshAttention();
+      } catch (err) {
+        setAttention({ kind: "error", message: describeError(err) });
+      } finally {
+        setAttentionBusy(false);
+      }
+    },
+    [refreshAttention],
+  );
+
+  const handleResolveAttention = useCallback(
+    async (id: string): Promise<void> => {
+      setAttentionBusy(true);
+      try {
+        await resolveAttentionItem(id);
+        await refreshAttention();
+      } catch (err) {
+        setAttention({ kind: "error", message: describeError(err) });
+      } finally {
+        setAttentionBusy(false);
+      }
+    },
+    [refreshAttention],
+  );
+
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -131,10 +193,11 @@ export function App(): JSX.Element {
     })();
     void refreshScanner();
     void refreshCustom();
+    void refreshAttention();
     return () => {
       cancelled = true;
     };
-  }, [refreshScanner, refreshCustom]);
+  }, [refreshScanner, refreshCustom, refreshAttention]);
 
   return (
     <div className="app">
@@ -162,21 +225,27 @@ export function App(): JSX.Element {
           onDelete={handleDeleteCustom}
           onToggle={handleToggleCustom}
         />
+        <AttentionCard
+          state={attention}
+          ticking={ticking}
+          busy={attentionBusy}
+          onRunTick={() => {
+            void handleRunTick();
+          }}
+          onMute={(id, hours) => {
+            void handleMuteAttention(id, hours);
+          }}
+          onResolve={(id) => {
+            void handleResolveAttention(id);
+          }}
+        />
 
         <section className="card card--placeholder">
           <h2>Active sessions</h2>
           <p>
-            Adapters that turn process candidates into real agent sessions land
-            in later build steps. Until then this surface stays empty.
-          </p>
-        </section>
-
-        <section className="card card--placeholder">
-          <h2>Attention</h2>
-          <p>
-            Once the attention engine is implemented, sessions that need a
-            human (waiting for input, rate-limited, stalled, errored) will
-            appear here.
+            The dedicated sessions card lands with build-plan §15 step 8.
+            Until then, recent activity is visible through{" "}
+            <em>Run monitor tick</em> and the Attention card above.
           </p>
         </section>
       </main>
