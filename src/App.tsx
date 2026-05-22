@@ -1,9 +1,18 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { JSX } from "react";
-import { getStorageReport, getTraySurface } from "./lib/tauri";
-import type { StorageReport, TraySurfaceReport } from "./lib/tauri";
+import {
+  getProcessScannerReport,
+  getStorageReport,
+  getTraySurface,
+} from "./lib/tauri";
+import type {
+  ProcessScannerReport,
+  StorageReport,
+  TraySurfaceReport,
+} from "./lib/tauri";
 import { TraySurfaceCard } from "./components/TraySurfaceCard";
 import { StorageCard } from "./components/StorageCard";
+import { ProcessScannerCard } from "./components/ProcessScannerCard";
 
 type AsyncState<T> =
   | { kind: "loading" }
@@ -17,6 +26,22 @@ export function App(): JSX.Element {
   const [storage, setStorage] = useState<AsyncState<StorageReport>>({
     kind: "loading",
   });
+  const [scanner, setScanner] = useState<AsyncState<ProcessScannerReport>>({
+    kind: "loading",
+  });
+  const [rescanning, setRescanning] = useState(false);
+
+  const refreshScanner = useCallback(async (): Promise<void> => {
+    setRescanning(true);
+    try {
+      const report = await getProcessScannerReport();
+      setScanner({ kind: "ready", report });
+    } catch (err) {
+      setScanner({ kind: "error", message: describeError(err) });
+    } finally {
+      setRescanning(false);
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -44,10 +69,11 @@ export function App(): JSX.Element {
         }
       }
     })();
+    void refreshScanner();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [refreshScanner]);
 
   return (
     <div className="app">
@@ -61,13 +87,19 @@ export function App(): JSX.Element {
       <main className="app__main">
         <TraySurfaceCard state={tray} />
         <StorageCard state={storage} />
+        <ProcessScannerCard
+          state={scanner}
+          onRescan={() => {
+            void refreshScanner();
+          }}
+          rescanning={rescanning}
+        />
 
         <section className="card card--placeholder">
           <h2>Active sessions</h2>
           <p>
-            No adapters are wired up yet. The process scanner and per-agent
-            adapters land in later build steps; until then this surface stays
-            empty.
+            Adapters that turn process candidates into real agent sessions land
+            in later build steps. Until then this surface stays empty.
           </p>
         </section>
 

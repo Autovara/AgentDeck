@@ -12,12 +12,14 @@
 //! will own all state. This shell simply wires the UI surface to the core
 //! through Tauri commands and events.
 
+mod process_scanner;
 mod storage;
 mod tray;
 
 use tauri::Manager;
 use tray::{TraySurfaceReport, TraySurfaceState};
 
+use crate::process_scanner::{ProcessScannerReport, ProcessScannerState};
 use crate::storage::{StorageReport, StorageReportState};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -38,12 +40,15 @@ fn build_app() -> tauri::Builder<tauri::Wry> {
         .invoke_handler(tauri::generate_handler![
             get_tray_surface,
             get_storage_report,
+            get_process_scanner_report,
         ])
         .setup(|app| {
             let handle = app.handle().clone();
 
             let storage_report = storage::initialise(&handle);
             app.manage(StorageReportState::new(storage_report));
+
+            app.manage(ProcessScannerState::new());
 
             let report = tray::probe(&handle);
 
@@ -101,6 +106,13 @@ fn get_tray_surface(state: tauri::State<'_, TraySurfaceState>) -> TraySurfaceRep
 
 #[tauri::command]
 fn get_storage_report(state: tauri::State<'_, StorageReportState>) -> StorageReport {
+    state.refresh()
+}
+
+#[tauri::command]
+fn get_process_scanner_report(
+    state: tauri::State<'_, ProcessScannerState>,
+) -> ProcessScannerReport {
     state.refresh()
 }
 

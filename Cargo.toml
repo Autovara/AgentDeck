@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/agentdeck-core",
     "crates/agentdeck-harness",
+    "crates/agentdeck-process",
     "crates/agentdeck-storage",
     "src-tauri",
 ]
@@ -16,6 +17,7 @@ authors = ["AgentDeck contributors"]
 [workspace.dependencies]
 # Internal crates
 agentdeck-core = { path = "crates/agentdeck-core" }
+agentdeck-process = { path = "crates/agentdeck-process" }
 agentdeck-storage = { path = "crates/agentdeck-storage" }
 
 # General purpose
@@ -34,6 +36,10 @@ dirs = "6.0"
 # JSON1/FTS5/etc which we will likely use as the monitor core grows).
 rusqlite = { version = "0.39", features = ["bundled", "chrono", "serde_json", "uuid"] }
 rusqlite_migration = "2.5"
+
+# Cross-platform process scanning. Default features include networking + disks +
+# components that we do not need; pin a minimal feature set instead.
+sysinfo = { version = "0.39", default-features = false, features = ["system"] }
 
 # Async runtime + logging (used by the Tauri shell and later the monitor core)
 tokio = { version = "1.52", features = ["rt-multi-thread", "macros", "sync", "time"] }

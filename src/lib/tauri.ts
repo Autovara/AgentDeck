@@ -91,3 +91,57 @@ export interface TableSnapshot {
 export async function getStorageReport(): Promise<StorageReport> {
   return invoke<StorageReport>("get_storage_report");
 }
+
+/**
+ * Process scanner diagnostic snapshot. Mirrors the `ProcessScannerReport`
+ * struct in `src-tauri/src/process_scanner.rs`.
+ */
+export interface ProcessScannerReport {
+  /** `true` once at least one scan has completed without error. */
+  ready: boolean;
+  /** Source identifier for the underlying `ProcessSource`: "sysinfo",
+   * "mock", or any future label. */
+  source: string;
+  /** Summary of the most recent scan; null until the first scan completes. */
+  lastScan: ScanSummary | null;
+  /** Candidate processes that matched at least one alpha agent pattern. */
+  candidates: AgentCandidate[];
+  /** Patterns the candidate extractor was run with. */
+  patterns: string[];
+  /** Verbatim error message when the most recent scan failed. */
+  error: string | null;
+  /** ISO-8601 UTC timestamp at which this report was assembled. */
+  capturedAt: string;
+}
+
+export interface ScanSummary {
+  /** UTC timestamp when the scan completed. */
+  startedAt: string;
+  /** Time spent enumerating processes, measured by the Rust side. */
+  scanDurationMs: number;
+  /** Number of processes in the snapshot. */
+  totalProcesses: number;
+}
+
+export interface AgentCandidate {
+  process: ProcessInfo;
+  matchedPatterns: string[];
+}
+
+export interface ProcessInfo {
+  pid: number;
+  parent_pid: number | null;
+  name: string;
+  cmdline: string[];
+  cwd: string | null;
+  /** ISO-8601 UTC. */
+  started_at: string;
+}
+
+/**
+ * Trigger a fresh process scan and return the resulting report. The Rust
+ * side runs sysinfo synchronously on this call, so callers should debounce.
+ */
+export async function getProcessScannerReport(): Promise<ProcessScannerReport> {
+  return invoke<ProcessScannerReport>("get_process_scanner_report");
+}

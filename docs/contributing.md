@@ -18,8 +18,9 @@ Workspace layout:
 
 - `crates/agentdeck-core` — OS-facing trait definitions (`ProcessSource`, `FileWatcher`, `Clock`) and core types
 - `crates/agentdeck-harness` — dev-time replay harness library and CLI
+- `crates/agentdeck-process` — `SysinfoProcessSource` and the `ProcessScanner` (snapshot + diff over any `ProcessSource`)
 - `crates/agentdeck-storage` — SQLite schema, migrations, and the `Storage` handle the monitor core uses
-- `src-tauri/` — Tauri application shell, tray detection, storage bootstrap, and Tauri commands consumed by the dashboard
+- `src-tauri/` — Tauri application shell, tray detection, storage bootstrap, process scanner wiring, and the Tauri commands consumed by the dashboard
 - `src/` — React 19 + TypeScript dashboard rendered inside the Tauri webview
 - `fixtures/sessions/` — recorded harness fixtures
 
@@ -92,6 +93,14 @@ AGENTDECK_DATA_DIR=/tmp/agentdeck-dev pnpm tauri:dev
 The shell opens the database during `setup()`, applies all migrations defined in `crates/agentdeck-storage/migrations/`, and configures `journal_mode=WAL`, `synchronous=NORMAL`, and `foreign_keys=ON`. Migrations are immutable once shipped; add new schema changes as a new `NNNN_*.sql` file and register it in `crates/agentdeck-storage/src/schema.rs`.
 
 To reset a development database, delete the file (and the `.db-wal`, `.db-shm` siblings) at the path above. To inspect it, use any modern SQLite tool — the schema is tagged `STRICT` so the table definitions are self-documenting.
+
+### Process scanner
+
+`crates/agentdeck-process` exposes a `ProcessScanner` that wraps any `ProcessSource` (from `agentdeck-core`) and produces wall-clock-stamped snapshots, plus a diff between consecutive snapshots. Production builds use `SysinfoProcessSource`, backed by the [`sysinfo`](https://crates.io/crates/sysinfo) crate with a minimal feature set (`default-features = false, features = ["system"]`). Tests substitute `agentdeck-harness::MockProcessSource` through the same trait.
+
+The Tauri shell currently invokes the scanner on demand from the `get_process_scanner_report` command (rendered as the "Process scanner" card on the dashboard). Once the monitor core lands, that command will read a cached snapshot maintained by a background tick loop instead of calling sysinfo synchronously.
+
+The scanner also exposes a lightweight `extract_candidates` helper that surfaces processes whose name or command line contains an alpha agent pattern (`aider`, `codex`, `claude`, `ollama`, `agent`). This is **not** the adapter framework — it exists so the diagnostics card can preview what adapters might see. Adapters will replace it with richer matching (exe path, parent process, file watchers, version probes).
 
 ## Code of conduct
 
