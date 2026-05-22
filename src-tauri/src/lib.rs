@@ -21,6 +21,7 @@ mod notifications;
 mod overview;
 mod process_scanner;
 mod storage;
+mod telegram;
 mod tray;
 mod tray_menu;
 mod tray_scheduler;
@@ -39,6 +40,7 @@ use crate::monitor_tick::{MonitorTickReport, MonitorTickState};
 use crate::overview::OverviewReport;
 use crate::process_scanner::{ProcessScannerReport, ProcessScannerState};
 use crate::storage::{StorageReport, StorageReportState};
+use crate::telegram::{PairingCodeResult, TelegramState, TelegramStatusReport};
 use crate::tray_menu::TrayMenuSnapshot;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -70,6 +72,14 @@ fn build_app() -> tauri::Builder<tauri::Wry> {
             resolve_attention_item,
             get_overview_report,
             get_adapter_diagnostics,
+            get_telegram_status,
+            set_telegram_token,
+            clear_telegram_token,
+            enable_telegram,
+            disable_telegram,
+            generate_telegram_pairing_code,
+            cancel_telegram_pairing,
+            revoke_telegram_user,
         ])
         .setup(|app| {
             let handle = app.handle().clone();
@@ -80,8 +90,9 @@ fn build_app() -> tauri::Builder<tauri::Wry> {
 
             app.manage(ProcessScannerState::new());
             app.manage(CustomAdapterState::new(storage_handle.clone()));
-            app.manage(MonitorTickState::new(storage_handle));
+            app.manage(MonitorTickState::new(storage_handle.clone()));
             app.manage(AlertsPausedState::new());
+            app.manage(TelegramState::new(storage_handle));
 
             let report = tray::probe(&handle);
 
@@ -124,6 +135,15 @@ fn build_app() -> tauri::Builder<tauri::Wry> {
             // the tray fell back. Spawn after every other state is
             // managed so the first tick sees a complete app.
             tray_scheduler::spawn(handle.clone());
+
+            // Restart the Telegram bot if the previous session left it
+            // enabled with a saved token. Best-effort; failures are
+            // logged and the dashboard still surfaces the new state.
+            let telegram_handle = handle.clone();
+            tauri::async_runtime::spawn(async move {
+                let state = telegram_handle.state::<TelegramState>();
+                state.maybe_start_on_boot().await;
+            });
 
             Ok(())
         })
@@ -237,6 +257,62 @@ fn get_overview_report(state: tauri::State<'_, MonitorTickState>) -> OverviewRep
 #[tauri::command]
 fn get_adapter_diagnostics(state: tauri::State<'_, MonitorTickState>) -> AdapterDiagnosticsReport {
     adapter_diagnostics::snapshot(&state)
+}
+
+#[tauri::command]
+fn get_telegram_status(state: tauri::State<'_, TelegramState>) -> TelegramStatusReport {
+    telegram::snapshot(&state)
+}
+
+#[tauri::command]
+async fn set_telegram_token(
+    token: String,
+    state: tauri::State<'_, TelegramState>,
+) -> Result<TelegramStatusReport, String> {
+    telegram::set_token(&state, token).await
+}
+
+#[tauri::command]
+async fn clear_telegram_token(
+    state: tauri::State<'_, TelegramState>,
+) -> Result<TelegramStatusReport, String> {
+    telegram::clear_token(&state).await
+}
+
+#[tauri::command]
+async fn enable_telegram(
+    state: tauri::State<'_, TelegramState>,
+) -> Result<TelegramStatusReport, String> {
+    telegram::enable(&state).await
+}
+
+#[tauri::command]
+async fn disable_telegram(
+    state: tauri::State<'_, TelegramState>,
+) -> Result<TelegramStatusReport, String> {
+    telegram::disable(&state).await
+}
+
+#[tauri::command]
+fn generate_telegram_pairing_code(
+    state: tauri::State<'_, TelegramState>,
+) -> Result<PairingCodeResult, String> {
+    telegram::generate_pairing_code(&state)
+}
+
+#[tauri::command]
+fn cancel_telegram_pairing(
+    state: tauri::State<'_, TelegramState>,
+) -> Result<TelegramStatusReport, String> {
+    telegram::cancel_pairing(&state)
+}
+
+#[tauri::command]
+fn revoke_telegram_user(
+    user_id: i64,
+    state: tauri::State<'_, TelegramState>,
+) -> Result<TelegramStatusReport, String> {
+    telegram::revoke_user(&state, user_id)
 }
 
 fn init_tracing() {

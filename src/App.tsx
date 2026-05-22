@@ -2,18 +2,26 @@ import { useCallback, useEffect, useState } from "react";
 import type { JSX } from "react";
 import {
   addCustomAdapter,
+  cancelTelegramPairing,
+  clearTelegramToken,
   deleteCustomAdapter,
+  disableTelegram,
+  enableTelegram,
+  generateTelegramPairingCode,
   getAdapterDiagnostics,
   getAttentionReport,
   getCustomAdapterReport,
   getOverviewReport,
   getProcessScannerReport,
   getStorageReport,
+  getTelegramStatus,
   getTraySurface,
   muteAttentionItem,
   resolveAttentionItem,
+  revokeTelegramUser,
   runMonitorTick,
   setCustomAdapterEnabled,
+  setTelegramToken,
 } from "./lib/tauri";
 import type {
   AdapterDiagnosticsReport,
@@ -23,6 +31,7 @@ import type {
   OverviewReport,
   ProcessScannerReport,
   StorageReport,
+  TelegramStatusReport,
   TraySurfaceReport,
 } from "./lib/tauri";
 import { Sidebar } from "./components/Sidebar";
@@ -30,6 +39,7 @@ import type { PageId, SidebarItem } from "./components/Sidebar";
 import { OverviewPage } from "./pages/OverviewPage";
 import { AttentionPage } from "./pages/AttentionPage";
 import { DiagnosticsPage } from "./pages/DiagnosticsPage";
+import { SettingsPage } from "./pages/SettingsPage";
 
 type AsyncState<T> =
   | { kind: "loading" }
@@ -63,6 +73,10 @@ export function App(): JSX.Element {
   const [adapterDiagnostics, setAdapterDiagnostics] = useState<
     AsyncState<AdapterDiagnosticsReport>
   >({ kind: "loading" });
+  const [telegram, setTelegram] = useState<AsyncState<TelegramStatusReport>>({
+    kind: "loading",
+  });
+  const [telegramBusy, setTelegramBusy] = useState(false);
   const [ticking, setTicking] = useState(false);
   const [lastTickAt, setLastTickAt] = useState<string | null>(null);
 
@@ -113,6 +127,64 @@ export function App(): JSX.Element {
       setAdapterDiagnostics({ kind: "error", message: describeError(err) });
     }
   }, []);
+
+  const refreshTelegram = useCallback(async (): Promise<void> => {
+    try {
+      const report = await getTelegramStatus();
+      setTelegram({ kind: "ready", report });
+    } catch (err) {
+      setTelegram({ kind: "error", message: describeError(err) });
+    }
+  }, []);
+
+  const runTelegramAction = useCallback(
+    async (
+      action: () => Promise<TelegramStatusReport | { status: TelegramStatusReport }>,
+    ): Promise<void> => {
+      setTelegramBusy(true);
+      try {
+        const result = await action();
+        const report =
+          "status" in result ? result.status : (result as TelegramStatusReport);
+        setTelegram({ kind: "ready", report });
+      } catch (err) {
+        setTelegram({ kind: "error", message: describeError(err) });
+      } finally {
+        setTelegramBusy(false);
+      }
+    },
+    [],
+  );
+
+  const handleEnableTelegram = useCallback(
+    () => runTelegramAction(() => enableTelegram()),
+    [runTelegramAction],
+  );
+  const handleDisableTelegram = useCallback(
+    () => runTelegramAction(() => disableTelegram()),
+    [runTelegramAction],
+  );
+  const handleSaveTelegramToken = useCallback(
+    (token: string) => runTelegramAction(() => setTelegramToken(token)),
+    [runTelegramAction],
+  );
+  const handleClearTelegramToken = useCallback(
+    () => runTelegramAction(() => clearTelegramToken()),
+    [runTelegramAction],
+  );
+  const handleGenerateTelegramCode = useCallback(
+    () => runTelegramAction(() => generateTelegramPairingCode()),
+    [runTelegramAction],
+  );
+  const handleCancelTelegramPairing = useCallback(
+    () => runTelegramAction(() => cancelTelegramPairing()),
+    [runTelegramAction],
+  );
+  const handleRevokeTelegramUser = useCallback(
+    (userId: number) =>
+      runTelegramAction(() => revokeTelegramUser(userId)),
+    [runTelegramAction],
+  );
 
   const handleAddCustom = useCallback(
     async (input: NewCustomAdapter): Promise<void> => {
@@ -236,6 +308,7 @@ export function App(): JSX.Element {
     void refreshAttention();
     void refreshOverview();
     void refreshAdapterDiagnostics();
+    void refreshTelegram();
     return () => {
       cancelled = true;
     };
@@ -245,6 +318,7 @@ export function App(): JSX.Element {
     refreshAttention,
     refreshOverview,
     refreshAdapterDiagnostics,
+    refreshTelegram,
   ]);
 
   const navItems: SidebarItem[] = [
@@ -261,6 +335,11 @@ export function App(): JSX.Element {
       id: "diagnostics",
       label: "Diagnostics",
       ...diagnosticsNavBadge(storage, tray, adapterDiagnostics),
+    },
+    {
+      id: "settings",
+      label: "Settings",
+      ...settingsNavBadge(telegram),
     },
   ];
 
@@ -320,6 +399,19 @@ export function App(): JSX.Element {
             onToggleCustom={handleToggleCustom}
           />
         )}
+        {page === "settings" && (
+          <SettingsPage
+            telegram={telegram}
+            telegramBusy={telegramBusy}
+            onEnable={handleEnableTelegram}
+            onDisable={handleDisableTelegram}
+            onSaveToken={handleSaveTelegramToken}
+            onClearToken={handleClearTelegramToken}
+            onGenerateCode={handleGenerateTelegramCode}
+            onCancelPairing={handleCancelTelegramPairing}
+            onRevokeUser={handleRevokeTelegramUser}
+          />
+        )}
       </main>
     </div>
   );
@@ -366,6 +458,20 @@ function diagnosticsNavBadge(
   }
   if (tray.kind === "ready" && tray.report.fallbackRequired) {
     return { badge: "tray", badgeKind: "warn" };
+  }
+  return {};
+}
+
+function settingsNavBadge(
+  telegram: AsyncState<TelegramStatusReport>,
+): { badge?: string | null; badgeKind?: "warn" | "bad" | "ok" | "neutral" } {
+  if (telegram.kind !== "ready") return {};
+  const r = telegram.report;
+  if (r.enabled && r.hasToken && !r.running) {
+    return { badge: "!", badgeKind: "warn" };
+  }
+  if (r.pendingPairing != null) {
+    return { badge: "pair", badgeKind: "warn" };
   }
   return {};
 }

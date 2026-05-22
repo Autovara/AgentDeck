@@ -1,6 +1,6 @@
 import type { JSX } from "react";
 
-export type PageId = "overview" | "attention" | "diagnostics";
+export type PageId = "overview" | "attention" | "diagnostics" | "settings";
 
 export type SidebarItem = {
   id: PageId;

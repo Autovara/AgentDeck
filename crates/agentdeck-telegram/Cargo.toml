@@ -1,0 +1,29 @@
+[package]
+name = "agentdeck-telegram"
+description = "Telegram pairing + bot lifecycle for AgentDeck. Step 17 of the alpha build plan; commands fill in later steps."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+agentdeck-storage = { workspace = true }
+chrono = { workspace = true }
+rand = "0.9"
+rusqlite = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+
+# Bot transport. rustls keeps us off the system OpenSSL on Linux, which
+# matters for AppImage packaging in build-plan §17.
+teloxide = { version = "0.13", default-features = false, features = [
+    "rustls",
+    "macros",
+] }
+
+[dev-dependencies]
+tempfile = "3.27"

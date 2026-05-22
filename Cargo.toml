@@ -13,6 +13,7 @@ members = [
     "crates/agentdeck-process",
     "crates/agentdeck-session",
     "crates/agentdeck-storage",
+    "crates/agentdeck-telegram",
     "src-tauri",
 ]
 
@@ -35,6 +36,7 @@ agentdeck-diagnostics = { path = "crates/agentdeck-diagnostics" }
 agentdeck-process = { path = "crates/agentdeck-process" }
 agentdeck-session = { path = "crates/agentdeck-session" }
 agentdeck-storage = { path = "crates/agentdeck-storage" }
+agentdeck-telegram = { path = "crates/agentdeck-telegram" }
 
 # General purpose
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde", "std"] }

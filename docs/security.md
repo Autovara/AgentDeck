@@ -32,6 +32,17 @@ Defaults the alpha must enforce:
 - Likely secrets are redacted before being persisted or sent.
 - Users can opt in per session to capture redacted log snippets for diagnostics; this is off by default.
 
+## Telegram bot token storage
+
+The Telegram bot token grants full control of your bot. AgentDeck handles it as follows:
+
+- **Alpha:** the token is stored as plain text in the local SQLite database (`settings.telegram.bot_token`). The database lives in your per-OS app data directory, the same trust boundary as `~/.ssh` and other user secrets.
+- **Beta:** the token will move to the OS keychain (macOS Keychain / Windows Credential Manager / Linux libsecret) so it is no longer readable by other processes running as your user.
+- The token is never logged, never written to the audit log, and never returned to the dashboard once saved. The dashboard only sees `hasToken: true|false`.
+- Clearing or replacing the token from the dashboard stops the bot and writes an audit entry of the change (but not the token itself).
+
+If you suspect a token has leaked, revoke it with `@BotFather`'s `/revoke` and save a new one in AgentDeck.
+
 ## Reporting a vulnerability
 
 To be filled before the repo goes public.

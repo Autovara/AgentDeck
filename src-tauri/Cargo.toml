@@ -30,6 +30,7 @@ agentdeck-diagnostics = { workspace = true }
 agentdeck-process = { workspace = true }
 agentdeck-session = { workspace = true }
 agentdeck-storage = { workspace = true }
+agentdeck-telegram = { workspace = true }
 
 serde = { workspace = true }
 serde_json = { workspace = true }

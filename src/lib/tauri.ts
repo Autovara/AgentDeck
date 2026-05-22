@@ -417,3 +417,80 @@ export interface AdapterDiagnosticsReport {
 export async function getAdapterDiagnostics(): Promise<AdapterDiagnosticsReport> {
   return invoke<AdapterDiagnosticsReport>("get_adapter_diagnostics");
 }
+
+// --- Telegram (build-plan §15 step 17) -------------------------------------
+
+/** One paired Telegram user. */
+export interface AllowlistEntry {
+  userId: number;
+  username: string | null;
+  pairedAt: string;
+}
+
+/** Pending pairing code surfaced through `get_telegram_status`. */
+export interface PendingPairingPayload {
+  code: string;
+  expiresAt: string;
+}
+
+/** Dashboard payload for the Telegram pairing card. */
+export interface TelegramStatusReport {
+  /** `true` when storage opened at startup. */
+  ready: boolean;
+  /** Whether the user has opted Telegram on. */
+  enabled: boolean;
+  /** Whether a bot token is saved (never returns the token itself). */
+  hasToken: boolean;
+  /** Whether the long-polling bot task is currently running. */
+  running: boolean;
+  /** Paired Telegram users, sorted by `pairedAt` ascending. */
+  allowlist: AllowlistEntry[];
+  /** Active pairing code, if any. Null after a code is consumed or
+   * expired. */
+  pendingPairing: PendingPairingPayload | null;
+  capturedAt: string;
+  error: string | null;
+}
+
+/** Result of `generate_telegram_pairing_code`. */
+export interface PairingCodeResult {
+  code: string;
+  expiresAt: string;
+  status: TelegramStatusReport;
+}
+
+export async function getTelegramStatus(): Promise<TelegramStatusReport> {
+  return invoke<TelegramStatusReport>("get_telegram_status");
+}
+
+export async function setTelegramToken(
+  token: string,
+): Promise<TelegramStatusReport> {
+  return invoke<TelegramStatusReport>("set_telegram_token", { token });
+}
+
+export async function clearTelegramToken(): Promise<TelegramStatusReport> {
+  return invoke<TelegramStatusReport>("clear_telegram_token");
+}
+
+export async function enableTelegram(): Promise<TelegramStatusReport> {
+  return invoke<TelegramStatusReport>("enable_telegram");
+}
+
+export async function disableTelegram(): Promise<TelegramStatusReport> {
+  return invoke<TelegramStatusReport>("disable_telegram");
+}
+
+export async function generateTelegramPairingCode(): Promise<PairingCodeResult> {
+  return invoke<PairingCodeResult>("generate_telegram_pairing_code");
+}
+
+export async function cancelTelegramPairing(): Promise<TelegramStatusReport> {
+  return invoke<TelegramStatusReport>("cancel_telegram_pairing");
+}
+
+export async function revokeTelegramUser(
+  userId: number,
+): Promise<TelegramStatusReport> {
+  return invoke<TelegramStatusReport>("revoke_telegram_user", { userId });
+}
