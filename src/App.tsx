@@ -1,16 +1,22 @@
 import { useEffect, useState } from "react";
 import type { JSX } from "react";
-import { getTraySurface } from "./lib/tauri";
-import type { TraySurfaceReport } from "./lib/tauri";
+import { getStorageReport, getTraySurface } from "./lib/tauri";
+import type { StorageReport, TraySurfaceReport } from "./lib/tauri";
 import { TraySurfaceCard } from "./components/TraySurfaceCard";
+import { StorageCard } from "./components/StorageCard";
 
-type TrayState =
+type AsyncState<T> =
   | { kind: "loading" }
-  | { kind: "ready"; report: TraySurfaceReport }
+  | { kind: "ready"; report: T }
   | { kind: "error"; message: string };
 
 export function App(): JSX.Element {
-  const [tray, setTray] = useState<TrayState>({ kind: "loading" });
+  const [tray, setTray] = useState<AsyncState<TraySurfaceReport>>({
+    kind: "loading",
+  });
+  const [storage, setStorage] = useState<AsyncState<StorageReport>>({
+    kind: "loading",
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -22,9 +28,19 @@ export function App(): JSX.Element {
         }
       } catch (err) {
         if (!cancelled) {
-          const message =
-            err instanceof Error ? err.message : String(err);
-          setTray({ kind: "error", message });
+          setTray({ kind: "error", message: describeError(err) });
+        }
+      }
+    })();
+    void (async () => {
+      try {
+        const report = await getStorageReport();
+        if (!cancelled) {
+          setStorage({ kind: "ready", report });
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setStorage({ kind: "error", message: describeError(err) });
         }
       }
     })();
@@ -44,6 +60,7 @@ export function App(): JSX.Element {
 
       <main className="app__main">
         <TraySurfaceCard state={tray} />
+        <StorageCard state={storage} />
 
         <section className="card card--placeholder">
           <h2>Active sessions</h2>
@@ -69,4 +86,14 @@ export function App(): JSX.Element {
       </footer>
     </div>
   );
+}
+
+function describeError(err: unknown): string {
+  if (err instanceof Error) {
+    return err.message;
+  }
+  if (typeof err === "string") {
+    return err;
+  }
+  return JSON.stringify(err);
 }

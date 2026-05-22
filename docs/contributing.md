@@ -18,7 +18,8 @@ Workspace layout:
 
 - `crates/agentdeck-core` — OS-facing trait definitions (`ProcessSource`, `FileWatcher`, `Clock`) and core types
 - `crates/agentdeck-harness` — dev-time replay harness library and CLI
-- `src-tauri/` — Tauri application shell, tray detection, and Tauri commands consumed by the dashboard
+- `crates/agentdeck-storage` — SQLite schema, migrations, and the `Storage` handle the monitor core uses
+- `src-tauri/` — Tauri application shell, tray detection, storage bootstrap, and Tauri commands consumed by the dashboard
 - `src/` — React 19 + TypeScript dashboard rendered inside the Tauri webview
 - `fixtures/sessions/` — recorded harness fixtures
 
@@ -73,6 +74,24 @@ The format and target filters follow the `tracing-subscriber` `EnvFilter` syntax
 ### Tray surface and the dashboard fallback
 
 At startup the Rust shell probes the host environment to decide whether the tray icon will be the primary surface. The result is exposed to the dashboard via the `get_tray_surface` Tauri command and rendered in the "Tray surface" card on the Overview page. When no tray is available (notably stock GNOME without the AppIndicator extension, and some Wayland sessions), AgentDeck opens the dashboard window directly. See `src-tauri/src/tray.rs` for the probe and the per-desktop decision table.
+
+### Local SQLite storage
+
+AgentDeck stores all session, attention, usage, audit, and settings data in a single SQLite database. The path is platform-specific:
+
+- macOS: `~/Library/Application Support/AgentDeck/agentdeck.db`
+- Windows: `%APPDATA%\AgentDeck\agentdeck.db`
+- Linux: `$XDG_DATA_HOME/agentdeck/agentdeck.db` (defaults to `~/.local/share/agentdeck/agentdeck.db`)
+
+Set `AGENTDECK_DATA_DIR` to override the parent directory; this is also how the smoke tests and CI runs keep the real user database untouched, e.g.:
+
+```bash
+AGENTDECK_DATA_DIR=/tmp/agentdeck-dev pnpm tauri:dev
+```
+
+The shell opens the database during `setup()`, applies all migrations defined in `crates/agentdeck-storage/migrations/`, and configures `journal_mode=WAL`, `synchronous=NORMAL`, and `foreign_keys=ON`. Migrations are immutable once shipped; add new schema changes as a new `NNNN_*.sql` file and register it in `crates/agentdeck-storage/src/schema.rs`.
+
+To reset a development database, delete the file (and the `.db-wal`, `.db-shm` siblings) at the path above. To inspect it, use any modern SQLite tool — the schema is tagged `STRICT` so the table definitions are self-documenting.
 
 ## Code of conduct
 

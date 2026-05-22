@@ -12,10 +12,13 @@
 //! will own all state. This shell simply wires the UI surface to the core
 //! through Tauri commands and events.
 
+mod storage;
 mod tray;
 
 use tauri::Manager;
 use tray::{TraySurfaceReport, TraySurfaceState};
+
+use crate::storage::{StorageReport, StorageReportState};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -32,9 +35,16 @@ fn build_app() -> tauri::Builder<tauri::Wry> {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_os::init())
-        .invoke_handler(tauri::generate_handler![get_tray_surface])
+        .invoke_handler(tauri::generate_handler![
+            get_tray_surface,
+            get_storage_report,
+        ])
         .setup(|app| {
             let handle = app.handle().clone();
+
+            let storage_report = storage::initialise(&handle);
+            app.manage(StorageReportState::new(storage_report));
+
             let report = tray::probe(&handle);
 
             tracing::info!(
@@ -87,6 +97,11 @@ fn ensure_dashboard_visible<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
 #[tauri::command]
 fn get_tray_surface(state: tauri::State<'_, TraySurfaceState>) -> TraySurfaceReport {
     state.snapshot()
+}
+
+#[tauri::command]
+fn get_storage_report(state: tauri::State<'_, StorageReportState>) -> StorageReport {
+    state.refresh()
 }
 
 fn init_tracing() {

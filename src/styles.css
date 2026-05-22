@@ -191,3 +191,39 @@ a {
   font-size: 13px;
   word-break: break-word;
 }
+
+.card__details {
+  margin-top: 12px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+.card__details summary {
+  cursor: pointer;
+  color: var(--fg-muted);
+  margin-bottom: 8px;
+  user-select: none;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.table th,
+.table td {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.table th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--fg-muted);
+}
+
+.table tr:last-child td {
+  border-bottom: none;
+}

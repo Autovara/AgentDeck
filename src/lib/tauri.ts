@@ -52,3 +52,42 @@ export type TrayMechanism =
 export async function getTraySurface(): Promise<TraySurfaceReport> {
   return invoke<TraySurfaceReport>("get_tray_surface");
 }
+
+/**
+ * Storage layer diagnostic snapshot. Mirrors the `StorageReport` struct in
+ * `src-tauri/src/storage.rs`.
+ */
+export interface StorageReport {
+  /** `true` when the database opened and migrations applied cleanly. */
+  ready: boolean;
+  /** Absolute path to the database file. */
+  path: string;
+  /** `PRAGMA user_version` after migrations; null on failure. */
+  schemaVersion: number | null;
+  /** File size in bytes (null for in-memory or before first write). */
+  sizeBytes: number | null;
+  /** SQLite journal mode; the storage layer aims for `wal`. */
+  journalMode: string | null;
+  /** Migrations the running binary knows about. */
+  appliedMigrations: MigrationSummary[];
+  /** Row counts per known table. */
+  tables: TableSnapshot[];
+  /** ISO-8601 UTC timestamp of this snapshot. */
+  capturedAt: string;
+  /** Verbatim error message when initialisation or refresh failed. */
+  error: string | null;
+}
+
+export interface MigrationSummary {
+  version: number;
+  label: string;
+}
+
+export interface TableSnapshot {
+  name: string;
+  rowCount: number;
+}
+
+export async function getStorageReport(): Promise<StorageReport> {
+  return invoke<StorageReport>("get_storage_report");
+}
