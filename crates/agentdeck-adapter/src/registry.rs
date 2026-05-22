@@ -167,6 +167,7 @@ mod tests {
             status: SessionStatus::Running,
             status_confidence: Confidence::Medium,
             status_source: "test".into(),
+            cost_per_hour_cents: None,
             observed_at: Utc.with_ymd_and_hms(2026, 5, 22, 10, 0, 0).unwrap(),
         }
     }

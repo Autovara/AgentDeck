@@ -494,3 +494,113 @@ export async function revokeTelegramUser(
 ): Promise<TelegramStatusReport> {
   return invoke<TelegramStatusReport>("revoke_telegram_user", { userId });
 }
+
+// --- Sessions / tags / export (build-plan §15 step 18) ---------------------
+
+/**
+ * Mirrors `agentdeck_session::Session`. Includes everything the
+ * Sessions page needs to render the table.
+ */
+export interface SessionRow {
+  id: string;
+  agentName: string;
+  adapterName: string;
+  adapterLevel: CapabilityLevel;
+  pid: number | null;
+  command: string;
+  cwd: string | null;
+  repoPath: string | null;
+  projectTag: string | null;
+  status: SessionStatus;
+  statusConfidence: AttentionConfidence;
+  attentionReason: string | null;
+  startTime: string;
+  lastSeenTime: string;
+  lastActivityTime: string | null;
+  estimatedCost: number | null;
+  costKind: CostKind;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Mirrors `sessions.cost_kind` enum. */
+export type CostKind = "exact" | "estimated" | "unknown";
+
+/** Dashboard payload for the Sessions page. */
+export interface SessionsReport {
+  ready: boolean;
+  sessions: SessionRow[];
+  capturedAt: string;
+  error: string | null;
+}
+
+export async function listSessions(): Promise<SessionsReport> {
+  return invoke<SessionsReport>("list_sessions");
+}
+
+/** One row in the `project_tags` table. */
+export interface ProjectTag {
+  id: string;
+  name: string;
+  color: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Input for `create_project_tag`. */
+export interface NewProjectTag {
+  name: string;
+  color?: string | null;
+  notes?: string | null;
+}
+
+/** Dashboard payload for the Project Tags card. */
+export interface ProjectTagsReport {
+  ready: boolean;
+  tags: ProjectTag[];
+  capturedAt: string;
+  error: string | null;
+}
+
+export async function listProjectTags(): Promise<ProjectTagsReport> {
+  return invoke<ProjectTagsReport>("list_project_tags");
+}
+
+export async function createProjectTag(
+  input: NewProjectTag,
+): Promise<ProjectTagsReport> {
+  return invoke<ProjectTagsReport>("create_project_tag", { input });
+}
+
+export async function deleteProjectTag(id: string): Promise<ProjectTagsReport> {
+  return invoke<ProjectTagsReport>("delete_project_tag", { id });
+}
+
+export async function assignSessionTag(
+  sessionId: string,
+  tagName: string,
+): Promise<void> {
+  return invoke<void>("assign_session_tag", { sessionId, tagName });
+}
+
+export async function clearSessionTagAssignment(
+  sessionId: string,
+): Promise<void> {
+  return invoke<void>("clear_session_tag", { sessionId });
+}
+
+/** Result of an export command. */
+export interface ExportResult {
+  path: string;
+  bytesWritten: number;
+  format: "csv" | "json";
+}
+
+export async function exportSessionsCsv(path: string): Promise<ExportResult> {
+  return invoke<ExportResult>("export_sessions_csv", { path });
+}
+
+export async function exportSessionsJson(path: string): Promise<ExportResult> {
+  return invoke<ExportResult>("export_sessions_json", { path });
+}

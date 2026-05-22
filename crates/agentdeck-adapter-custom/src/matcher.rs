@@ -62,6 +62,11 @@ pub struct CustomAdapterMatch {
     pub agent_name: String,
     pub match_kind: MatchKind,
     pub process: ProcessInfo,
+    /// User-configured rate from the `custom_adapters.cost_per_hour_cents`
+    /// column. Threaded through to [`agentdeck_adapter::AdapterMatch`]
+    /// so the session state machine can populate
+    /// `sessions.estimated_cost`.
+    pub cost_per_hour_cents: Option<i64>,
 }
 
 /// Run every enabled adapter against the snapshot and return all matches.
@@ -82,6 +87,7 @@ pub fn match_snapshot(
                     agent_name: adapter.definition.agent_name.clone(),
                     match_kind: adapter.definition.match_kind,
                     process: proc.clone(),
+                    cost_per_hour_cents: adapter.definition.cost_per_hour_cents,
                 });
             }
         }

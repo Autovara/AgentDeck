@@ -103,6 +103,7 @@ impl Adapter for ClaudeCodeAdapter {
                 status: SessionStatus::Running,
                 status_confidence: Confidence::Medium,
                 status_source: STATUS_SOURCE.to_string(),
+                cost_per_hour_cents: None,
                 observed_at: snapshot.captured_at,
             })
             .collect();

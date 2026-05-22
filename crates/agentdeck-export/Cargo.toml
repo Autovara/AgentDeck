@@ -1,0 +1,18 @@
+[package]
+name = "agentdeck-export"
+description = "CSV and JSON export of AgentDeck sessions (build-plan §15 step 18)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+agentdeck-adapter = { workspace = true }
+agentdeck-session = { workspace = true }
+agentdeck-storage = { workspace = true }
+chrono = { workspace = true }
+rusqlite = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+uuid = { workspace = true }

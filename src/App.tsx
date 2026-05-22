@@ -2,9 +2,13 @@ import { useCallback, useEffect, useState } from "react";
 import type { JSX } from "react";
 import {
   addCustomAdapter,
+  assignSessionTag,
   cancelTelegramPairing,
+  clearSessionTagAssignment,
   clearTelegramToken,
+  createProjectTag,
   deleteCustomAdapter,
+  deleteProjectTag,
   disableTelegram,
   enableTelegram,
   generateTelegramPairingCode,
@@ -16,6 +20,8 @@ import {
   getStorageReport,
   getTelegramStatus,
   getTraySurface,
+  listProjectTags,
+  listSessions,
   muteAttentionItem,
   resolveAttentionItem,
   revokeTelegramUser,
@@ -28,8 +34,11 @@ import type {
   AttentionReport,
   CustomAdapterReport,
   NewCustomAdapter,
+  NewProjectTag,
   OverviewReport,
   ProcessScannerReport,
+  ProjectTagsReport,
+  SessionsReport,
   StorageReport,
   TelegramStatusReport,
   TraySurfaceReport,
@@ -39,6 +48,7 @@ import type { PageId, SidebarItem } from "./components/Sidebar";
 import { OverviewPage } from "./pages/OverviewPage";
 import { AttentionPage } from "./pages/AttentionPage";
 import { DiagnosticsPage } from "./pages/DiagnosticsPage";
+import { SessionsPage } from "./pages/SessionsPage";
 import { SettingsPage } from "./pages/SettingsPage";
 
 type AsyncState<T> =
@@ -77,6 +87,14 @@ export function App(): JSX.Element {
     kind: "loading",
   });
   const [telegramBusy, setTelegramBusy] = useState(false);
+  const [sessions, setSessions] = useState<AsyncState<SessionsReport>>({
+    kind: "loading",
+  });
+  const [projectTags, setProjectTags] = useState<AsyncState<ProjectTagsReport>>({
+    kind: "loading",
+  });
+  const [tagsBusy, setTagsBusy] = useState(false);
+  const [busyTagSession, setBusyTagSession] = useState<string | null>(null);
   const [ticking, setTicking] = useState(false);
   const [lastTickAt, setLastTickAt] = useState<string | null>(null);
 
@@ -136,6 +154,85 @@ export function App(): JSX.Element {
       setTelegram({ kind: "error", message: describeError(err) });
     }
   }, []);
+
+  const refreshSessions = useCallback(async (): Promise<void> => {
+    try {
+      const report = await listSessions();
+      setSessions({ kind: "ready", report });
+    } catch (err) {
+      setSessions({ kind: "error", message: describeError(err) });
+    }
+  }, []);
+
+  const refreshTags = useCallback(async (): Promise<void> => {
+    try {
+      const report = await listProjectTags();
+      setProjectTags({ kind: "ready", report });
+    } catch (err) {
+      setProjectTags({ kind: "error", message: describeError(err) });
+    }
+  }, []);
+
+  const handleCreateTag = useCallback(
+    async (input: NewProjectTag): Promise<void> => {
+      setTagsBusy(true);
+      try {
+        const report = await createProjectTag(input);
+        setProjectTags({ kind: "ready", report });
+      } finally {
+        setTagsBusy(false);
+      }
+    },
+    [],
+  );
+
+  const handleDeleteTag = useCallback(
+    async (id: string): Promise<void> => {
+      setTagsBusy(true);
+      try {
+        const report = await deleteProjectTag(id);
+        setProjectTags({ kind: "ready", report });
+        // Tag deletion clears it from sessions; refresh so the
+        // Sessions page reflects that.
+        await refreshSessions();
+      } catch (err) {
+        setProjectTags({ kind: "error", message: describeError(err) });
+      } finally {
+        setTagsBusy(false);
+      }
+    },
+    [refreshSessions],
+  );
+
+  const handleAssignTag = useCallback(
+    async (sessionId: string, tagName: string): Promise<void> => {
+      setBusyTagSession(sessionId);
+      try {
+        await assignSessionTag(sessionId, tagName);
+        await refreshSessions();
+      } catch (err) {
+        setSessions({ kind: "error", message: describeError(err) });
+      } finally {
+        setBusyTagSession(null);
+      }
+    },
+    [refreshSessions],
+  );
+
+  const handleClearTag = useCallback(
+    async (sessionId: string): Promise<void> => {
+      setBusyTagSession(sessionId);
+      try {
+        await clearSessionTagAssignment(sessionId);
+        await refreshSessions();
+      } catch (err) {
+        setSessions({ kind: "error", message: describeError(err) });
+      } finally {
+        setBusyTagSession(null);
+      }
+    },
+    [refreshSessions],
+  );
 
   const runTelegramAction = useCallback(
     async (
@@ -236,6 +333,7 @@ export function App(): JSX.Element {
         refreshAttention(),
         refreshScanner(),
         refreshAdapterDiagnostics(),
+        refreshSessions(),
       ]);
     } finally {
       setTicking(false);
@@ -245,6 +343,7 @@ export function App(): JSX.Element {
     refreshAttention,
     refreshOverview,
     refreshScanner,
+    refreshSessions,
   ]);
 
   const handleMuteAttention = useCallback(
@@ -309,6 +408,8 @@ export function App(): JSX.Element {
     void refreshOverview();
     void refreshAdapterDiagnostics();
     void refreshTelegram();
+    void refreshSessions();
+    void refreshTags();
     return () => {
       cancelled = true;
     };
@@ -319,6 +420,8 @@ export function App(): JSX.Element {
     refreshOverview,
     refreshAdapterDiagnostics,
     refreshTelegram,
+    refreshSessions,
+    refreshTags,
   ]);
 
   const navItems: SidebarItem[] = [
@@ -330,6 +433,10 @@ export function App(): JSX.Element {
       id: "attention",
       label: "Attention",
       ...attentionNavBadge(attention),
+    },
+    {
+      id: "sessions",
+      label: "Sessions",
     },
     {
       id: "diagnostics",
@@ -399,6 +506,15 @@ export function App(): JSX.Element {
             onToggleCustom={handleToggleCustom}
           />
         )}
+        {page === "sessions" && (
+          <SessionsPage
+            sessions={sessions}
+            tags={projectTags}
+            busyTag={busyTagSession}
+            onAssignTag={handleAssignTag}
+            onClearTag={handleClearTag}
+          />
+        )}
         {page === "settings" && (
           <SettingsPage
             telegram={telegram}
@@ -410,6 +526,11 @@ export function App(): JSX.Element {
             onGenerateCode={handleGenerateTelegramCode}
             onCancelPairing={handleCancelTelegramPairing}
             onRevokeUser={handleRevokeTelegramUser}
+            tags={projectTags}
+            tagsBusy={tagsBusy}
+            onCreateTag={handleCreateTag}
+            onDeleteTag={handleDeleteTag}
+            storageReady={storage.kind === "ready" && storage.report.ready}
           />
         )}
       </main>

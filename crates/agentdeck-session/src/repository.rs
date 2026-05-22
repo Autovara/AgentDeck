@@ -32,6 +32,17 @@ pub(crate) fn list_active(conn: &Connection) -> rusqlite::Result<Vec<Session>> {
     iter.collect()
 }
 
+/// Every session in the database, oldest first. Used by the Sessions
+/// dashboard page (cost / tag history) and by the export.
+pub(crate) fn list_all(conn: &Connection) -> rusqlite::Result<Vec<Session>> {
+    let query = format!(
+        "SELECT {SESSION_COLUMNS} FROM sessions ORDER BY created_at ASC",
+    );
+    let mut stmt = conn.prepare(&query)?;
+    let iter = stmt.query_map([], session_from_row)?;
+    iter.collect()
+}
+
 /// Look up a single session by id, regardless of status. Returns
 /// `Ok(None)` when the row does not exist.
 pub(crate) fn get(conn: &Connection, id: Uuid) -> rusqlite::Result<Option<Session>> {
@@ -81,8 +92,9 @@ pub(crate) fn insert(conn: &Connection, session: &Session) -> rusqlite::Result<(
 /// Touch the row for `(adapter_name, pid)` with a fresh match.
 ///
 /// Updates `command`, `cwd`, `repo_path`, `status`, `status_confidence`,
-/// `last_seen_time`, and `updated_at`. `start_time` is preserved so the
-/// session's age stays accurate across long runs.
+/// `estimated_cost`, `cost_kind`, `last_seen_time`, and `updated_at`.
+/// `start_time` is preserved so the session's age stays accurate across
+/// long runs.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn update_from_match(
     conn: &Connection,
@@ -90,19 +102,24 @@ pub(crate) fn update_from_match(
     m: &AdapterMatch,
     snapshot_time: DateTime<Utc>,
     now: DateTime<Utc>,
+    estimated_cost: Option<f64>,
+    cost_kind: CostKind,
 ) -> rusqlite::Result<()> {
     let updated = conn.execute(
         "UPDATE sessions SET \
             command = ?1, cwd = ?2, repo_path = ?3, \
             status = ?4, status_confidence = ?5, \
-            last_seen_time = ?6, updated_at = ?7 \
-         WHERE id = ?8",
+            estimated_cost = ?6, cost_kind = ?7, \
+            last_seen_time = ?8, updated_at = ?9 \
+         WHERE id = ?10",
         params![
             &m.command,
             m.cwd.as_deref(),
             m.repo_path.as_deref(),
             m.status.as_db_str(),
             m.status_confidence.as_db_str(),
+            estimated_cost,
+            cost_kind.as_db_str(),
             format_ts(snapshot_time),
             format_ts(now),
             session_id.to_string(),

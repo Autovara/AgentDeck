@@ -58,6 +58,10 @@ impl Session {
         snapshot_time: DateTime<Utc>,
         now: DateTime<Utc>,
     ) -> Self {
+        // Session has just been observed: elapsed time is zero, so the
+        // initial estimated cost is $0.00 when a rate is known.
+        let (estimated_cost, cost_kind) =
+            estimate_cost(snapshot_time, snapshot_time, m.cost_per_hour_cents);
         Self {
             id,
             agent_name: m.agent_name.clone(),
@@ -74,11 +78,35 @@ impl Session {
             start_time: snapshot_time,
             last_seen_time: snapshot_time,
             last_activity_time: None,
-            estimated_cost: None,
-            cost_kind: CostKind::Unknown,
+            estimated_cost,
+            cost_kind,
             created_at: now,
             updated_at: now,
         }
+    }
+}
+
+/// Cost computation shared by the state machine's insert and update
+/// paths.
+///
+/// Returns `(estimated_cost_usd, cost_kind)`:
+///
+/// - `cost_per_hour_cents = Some(rate)` → `(Some(rate × elapsed_h /
+///   100), Estimated)`. Elapsed is clamped to zero so a future-dated
+///   snapshot can never produce a negative cost.
+/// - `cost_per_hour_cents = None` → `(None, Unknown)`.
+pub(crate) fn estimate_cost(
+    start_time: DateTime<Utc>,
+    snapshot_time: DateTime<Utc>,
+    cost_per_hour_cents: Option<i64>,
+) -> (Option<f64>, CostKind) {
+    match cost_per_hour_cents {
+        Some(rate) => {
+            let elapsed_secs = (snapshot_time - start_time).num_seconds().max(0) as f64;
+            let cost_cents = rate as f64 * elapsed_secs / 3600.0;
+            (Some(cost_cents / 100.0), CostKind::Estimated)
+        }
+        None => (None, CostKind::Unknown),
     }
 }
 
@@ -145,6 +173,7 @@ mod tests {
             status: SessionStatus::Running,
             status_confidence: Confidence::Medium,
             status_source: "process-list".into(),
+            cost_per_hour_cents: None,
             observed_at: ts(),
         }
     }

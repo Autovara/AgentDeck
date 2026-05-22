@@ -78,9 +78,11 @@ dependencies = [
  "agentdeck-attention",
  "agentdeck-core",
  "agentdeck-diagnostics",
+ "agentdeck-export",
  "agentdeck-process",
  "agentdeck-session",
  "agentdeck-storage",
+ "agentdeck-tags",
  "agentdeck-telegram",
  "anyhow",
  "chrono",
@@ -143,6 +145,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "agentdeck-export"
+version = "0.0.0"
+dependencies = [
+ "agentdeck-adapter",
+ "agentdeck-session",
+ "agentdeck-storage",
+ "chrono",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "uuid",
+]
+
+[[package]]
 name = "agentdeck-harness"
 version = "0.0.0"
 dependencies = [
@@ -199,6 +216,18 @@ dependencies = [
  "tempfile",
  "thiserror 1.0.69",
  "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "agentdeck-tags"
+version = "0.0.0"
+dependencies = [
+ "agentdeck-storage",
+ "chrono",
+ "rusqlite",
+ "serde",
+ "thiserror 1.0.69",
  "uuid",
 ]
 

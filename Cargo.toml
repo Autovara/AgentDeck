@@ -9,10 +9,12 @@ members = [
     "crates/agentdeck-attention",
     "crates/agentdeck-core",
     "crates/agentdeck-diagnostics",
+    "crates/agentdeck-export",
     "crates/agentdeck-harness",
     "crates/agentdeck-process",
     "crates/agentdeck-session",
     "crates/agentdeck-storage",
+    "crates/agentdeck-tags",
     "crates/agentdeck-telegram",
     "src-tauri",
 ]
@@ -33,9 +35,11 @@ agentdeck-adapter-custom = { path = "crates/agentdeck-adapter-custom" }
 agentdeck-attention = { path = "crates/agentdeck-attention" }
 agentdeck-core = { path = "crates/agentdeck-core" }
 agentdeck-diagnostics = { path = "crates/agentdeck-diagnostics" }
+agentdeck-export = { path = "crates/agentdeck-export" }
 agentdeck-process = { path = "crates/agentdeck-process" }
 agentdeck-session = { path = "crates/agentdeck-session" }
 agentdeck-storage = { path = "crates/agentdeck-storage" }
+agentdeck-tags = { path = "crates/agentdeck-tags" }
 agentdeck-telegram = { path = "crates/agentdeck-telegram" }
 
 # General purpose

@@ -106,6 +106,7 @@ impl Adapter for CustomProcessAdapter {
                 status: SessionStatus::Running,
                 status_confidence: Confidence::Medium,
                 status_source: STATUS_SOURCE.to_string(),
+                cost_per_hour_cents: m.cost_per_hour_cents,
                 observed_at: snapshot.captured_at,
             })
             .collect();

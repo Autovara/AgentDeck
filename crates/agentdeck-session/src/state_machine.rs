@@ -12,8 +12,8 @@ use uuid::Uuid;
 
 use crate::error::SessionError;
 use crate::model::{
-    detected_event_payload, status_changed_event_payload, Session, EVENT_KIND_DETECTED,
-    EVENT_KIND_PROCESS_EXITED, EVENT_KIND_STATUS_CHANGED,
+    detected_event_payload, estimate_cost, status_changed_event_payload, Session,
+    EVENT_KIND_DETECTED, EVENT_KIND_PROCESS_EXITED, EVENT_KIND_STATUS_CHANGED,
 };
 use crate::repository;
 
@@ -102,7 +102,17 @@ impl SessionStateMachine {
                             now,
                         )?;
                     }
-                    repository::update_from_match(&tx, existing.id, m, snapshot_time, now)?;
+                    let (cost, cost_kind) =
+                        estimate_cost(existing.start_time, snapshot_time, m.cost_per_hour_cents);
+                    repository::update_from_match(
+                        &tx,
+                        existing.id,
+                        m,
+                        snapshot_time,
+                        now,
+                        cost,
+                        cost_kind,
+                    )?;
                     report.updated.push(existing.id);
                 } else {
                     let new_id = Uuid::new_v4();

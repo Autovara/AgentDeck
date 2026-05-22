@@ -42,6 +42,13 @@ pub struct AdapterMatch {
     /// Short label for *how* the status was decided. The diagnostics card
     /// surfaces this verbatim (e.g. `"process-list"`, `"history-mtime"`).
     pub status_source: String,
+    /// Adapter-declared rate (in cents per hour) the session state
+    /// machine should use to compute `sessions.estimated_cost`. `None`
+    /// when the adapter has no rate (the alpha default for Aider /
+    /// Codex / Claude Code; the custom adapter populates from the
+    /// user-configured row). When `Some`, the state machine writes
+    /// `cost_kind = Estimated`.
+    pub cost_per_hour_cents: Option<i64>,
     /// Snapshot timestamp this match was derived from.
     pub observed_at: DateTime<Utc>,
 }

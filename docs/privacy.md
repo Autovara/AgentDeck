@@ -36,7 +36,11 @@ When Telegram is enabled, AgentDeck connects to `api.telegram.org` over HTTPS an
 
 ## Data export and deletion
 
-The dashboard provides export to CSV or JSON and a clear-history action with confirmation. The audit log is preserved until you explicitly clear it.
+The dashboard's Settings page provides a sessions export to either CSV or JSON. Both formats include every session row (active and completed) with its agent name, adapter, repo path, project tag, status, cost label, and timestamps. **Bot tokens, audit-log entries, attention messages, and raw terminal output are not included** in the sessions export.
+
+Export writes go straight to a file path you pick via the OS save dialog. AgentDeck never uploads exported data anywhere — the file lives wherever you save it.
+
+The audit log is preserved until you explicitly clear it. A clear-history action will land in a later alpha build.
 
 ## Reporting a privacy concern
 

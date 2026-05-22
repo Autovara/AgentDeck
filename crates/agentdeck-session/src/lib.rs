@@ -74,3 +74,11 @@ pub fn get_session(
         .with_conn(|conn| repository::get(conn, id))
         .map_err(SessionError::from)
 }
+
+/// Every session in the database, oldest first. Includes completed
+/// rows so the Sessions dashboard page can render cost / tag history.
+pub fn list_all(storage: &Arc<Storage>) -> Result<Vec<Session>, SessionError> {
+    storage
+        .with_conn(repository::list_all)
+        .map_err(SessionError::from)
+}

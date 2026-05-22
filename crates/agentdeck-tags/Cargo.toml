@@ -1,0 +1,15 @@
+[package]
+name = "agentdeck-tags"
+description = "Project / client tags. CRUD over the project_tags table plus per-session tag assignment."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+agentdeck-storage = { workspace = true }
+chrono = { workspace = true }
+rusqlite = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+uuid = { workspace = true }

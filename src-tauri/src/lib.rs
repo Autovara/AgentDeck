@@ -16,19 +16,25 @@ mod adapter_diagnostics;
 mod alerts;
 mod attention;
 mod custom_adapter;
+mod export;
 mod monitor_tick;
 mod notifications;
 mod overview;
 mod process_scanner;
+mod sessions;
 mod stop;
 mod storage;
+mod tags;
 mod telegram;
 mod tray;
 mod tray_menu;
 mod tray_scheduler;
 
+use std::path::PathBuf;
+
 use agentdeck_adapter_custom::NewCustomAdapter;
 use agentdeck_attention::AttentionItem;
+use agentdeck_tags::NewProjectTag;
 use tauri::Manager;
 use tray::{TraySurfaceReport, TraySurfaceState};
 use uuid::Uuid;
@@ -37,10 +43,13 @@ use crate::adapter_diagnostics::AdapterDiagnosticsReport;
 use crate::alerts::AlertsPausedState;
 use crate::attention::AttentionReport;
 use crate::custom_adapter::{CustomAdapterReport, CustomAdapterState};
+use crate::export::{ExportResult, ExportState};
 use crate::monitor_tick::{MonitorTickReport, MonitorTickState};
 use crate::overview::OverviewReport;
 use crate::process_scanner::{ProcessScannerReport, ProcessScannerState};
+use crate::sessions::{SessionsReport, SessionsState};
 use crate::storage::{StorageReport, StorageReportState};
+use crate::tags::{ProjectTagsReport, ProjectTagsState};
 use crate::telegram::{PairingCodeResult, TelegramState, TelegramStatusReport};
 use crate::tray_menu::TrayMenuSnapshot;
 
@@ -81,6 +90,14 @@ fn build_app() -> tauri::Builder<tauri::Wry> {
             generate_telegram_pairing_code,
             cancel_telegram_pairing,
             revoke_telegram_user,
+            list_sessions,
+            list_project_tags,
+            create_project_tag,
+            delete_project_tag,
+            assign_session_tag,
+            clear_session_tag,
+            export_sessions_csv,
+            export_sessions_json,
         ])
         .setup(|app| {
             let handle = app.handle().clone();
@@ -93,6 +110,9 @@ fn build_app() -> tauri::Builder<tauri::Wry> {
             app.manage(CustomAdapterState::new(storage_handle.clone()));
             app.manage(MonitorTickState::new(storage_handle.clone()));
             app.manage(AlertsPausedState::new());
+            app.manage(SessionsState::new(storage_handle.clone()));
+            app.manage(ProjectTagsState::new(storage_handle.clone()));
+            app.manage(ExportState::new(storage_handle.clone()));
             app.manage(TelegramState::new(storage_handle));
 
             let report = tray::probe(&handle);
@@ -314,6 +334,70 @@ fn revoke_telegram_user(
     state: tauri::State<'_, TelegramState>,
 ) -> Result<TelegramStatusReport, String> {
     telegram::revoke_user(&state, user_id)
+}
+
+#[tauri::command]
+fn list_sessions(state: tauri::State<'_, SessionsState>) -> SessionsReport {
+    sessions::snapshot(&state)
+}
+
+#[tauri::command]
+fn list_project_tags(state: tauri::State<'_, ProjectTagsState>) -> ProjectTagsReport {
+    tags::snapshot(&state)
+}
+
+#[tauri::command]
+fn create_project_tag(
+    input: NewProjectTag,
+    state: tauri::State<'_, ProjectTagsState>,
+) -> Result<ProjectTagsReport, String> {
+    tags::create_tag(&state, input)
+}
+
+#[tauri::command]
+fn delete_project_tag(
+    id: String,
+    state: tauri::State<'_, ProjectTagsState>,
+) -> Result<ProjectTagsReport, String> {
+    let uuid = Uuid::parse_str(&id).map_err(|e| format!("invalid uuid {id:?}: {e}"))?;
+    tags::delete_tag(&state, uuid)
+}
+
+#[tauri::command]
+fn assign_session_tag(
+    session_id: String,
+    tag_name: String,
+    state: tauri::State<'_, ProjectTagsState>,
+) -> Result<(), String> {
+    let uuid =
+        Uuid::parse_str(&session_id).map_err(|e| format!("invalid uuid {session_id:?}: {e}"))?;
+    tags::assign_session_tag(&state, uuid, &tag_name)
+}
+
+#[tauri::command]
+fn clear_session_tag(
+    session_id: String,
+    state: tauri::State<'_, ProjectTagsState>,
+) -> Result<(), String> {
+    let uuid =
+        Uuid::parse_str(&session_id).map_err(|e| format!("invalid uuid {session_id:?}: {e}"))?;
+    tags::clear_session_tag(&state, uuid)
+}
+
+#[tauri::command]
+fn export_sessions_csv(
+    path: String,
+    state: tauri::State<'_, ExportState>,
+) -> Result<ExportResult, String> {
+    export::write_sessions_csv(&state, PathBuf::from(path))
+}
+
+#[tauri::command]
+fn export_sessions_json(
+    path: String,
+    state: tauri::State<'_, ExportState>,
+) -> Result<ExportResult, String> {
+    export::write_sessions_json(&state, PathBuf::from(path))
 }
 
 fn init_tracing() {

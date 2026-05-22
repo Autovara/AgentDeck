@@ -61,6 +61,7 @@ fn make_match(
         status,
         status_confidence: Confidence::Medium,
         status_source: "process-list".into(),
+        cost_per_hour_cents: None,
         observed_at: snapshot,
     }
 }
