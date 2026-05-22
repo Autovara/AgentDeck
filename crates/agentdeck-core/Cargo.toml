@@ -1,0 +1,12 @@
+[package]
+name = "agentdeck-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Core traits and types for AgentDeck: process, file, and clock abstractions used by adapters and the dev-time replay harness."
+
+[dependencies]
+chrono.workspace = true
+serde.workspace = true
+thiserror.workspace = true

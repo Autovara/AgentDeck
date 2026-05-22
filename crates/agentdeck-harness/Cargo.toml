@@ -1,0 +1,26 @@
+[package]
+name = "agentdeck-harness"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Dev-time replay harness for AgentDeck adapters. Lets adapters be developed and tested without running real AI coding agents."
+
+[lib]
+name = "agentdeck_harness"
+path = "src/lib.rs"
+
+[[bin]]
+name = "agentdeck-harness"
+path = "src/bin/harness.rs"
+
+[dependencies]
+agentdeck-core.workspace = true
+anyhow.workspace = true
+chrono.workspace = true
+clap.workspace = true
+regex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+walkdir.workspace = true
