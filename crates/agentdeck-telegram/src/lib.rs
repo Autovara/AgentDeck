@@ -1,11 +1,8 @@
-//! Telegram pairing for AgentDeck.
+//! Telegram bot for AgentDeck.
 //!
-//! This crate is the user-facing interface to the Telegram bot. The
-//! alpha scope is **pairing only**: enabling Telegram, storing a bot
-//! token, generating a one-time pairing code, listening for it on the
-//! bot, and recording the sender's Telegram user id in an allowlist.
-//! Read-only commands land in step 18 (build-plan §15), `/mute` in step
-//! 19, `/stop` with confirmation in step 20.
+//! Build-plan §15 step 17 added pairing; step 18 added the read-only
+//! commands (`/help`, `/status`, `/agents`, `/attention`, `/session`)
+//! and a per-user rate limiter; `/mute` and `/stop` land in 19 and 20.
 //!
 //! Storage:
 //!
@@ -22,19 +19,26 @@
 //!   long-polling task via [`bot::start_bot`]. Disabling, clearing the
 //!   token, or replacing the token cleanly aborts the existing task
 //!   and spawns a fresh one.
-//! - The bot only services pairing in this step; once paired, the
-//!   sender is added to the allowlist and a stub reply tells them
-//!   commands are coming. Future steps wire the command dispatcher
-//!   onto the same handler.
+//! - The bot routes pairing first (no rate limit), then allowlist-
+//!   gates everything else, then rate-limits, then parses + dispatches
+//!   slash commands via the pure [`commands`] module.
 
 pub mod allowlist;
 pub mod audit;
 pub mod bot;
+pub mod commands;
 pub mod error;
 pub mod pairing;
+pub mod rate_limit;
 pub mod settings;
 
 pub use allowlist::AllowlistEntry;
 pub use bot::{start_bot, BotContext, BotHandle};
+pub use commands::{
+    format_agents, format_attention, format_help, format_rate_limited, format_session_detail,
+    format_session_not_found, format_session_usage, format_status, format_unknown_command,
+    lookup_session, parse_command, short_session_id, BotCommand, SessionLookup,
+};
 pub use error::TelegramError;
 pub use pairing::{generate_pairing_code, PairingCode, PairingState, TryConsume};
+pub use rate_limit::{RateLimitOutcome, RateLimiter};

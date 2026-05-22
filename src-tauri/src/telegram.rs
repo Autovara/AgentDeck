@@ -16,12 +16,14 @@
 
 use std::sync::{Arc, Mutex};
 
+use agentdeck_attention::AttentionEngine;
+use agentdeck_core::{Clock, SystemClock};
 use agentdeck_storage::Storage;
 use agentdeck_telegram::{
     allowlist, audit,
     bot::{self, BotContext, BotHandle},
     pairing::{self, PairingState, DEFAULT_EXPIRY},
-    settings, AllowlistEntry, TelegramError,
+    settings, AllowlistEntry, RateLimiter, TelegramError,
 };
 use chrono::{DateTime, Utc};
 use serde::Serialize;
@@ -76,16 +78,23 @@ pub struct TelegramState {
 struct Inner {
     storage: Arc<Storage>,
     pairing: Arc<PairingState>,
+    attention: Arc<AttentionEngine>,
+    rate_limiter: Arc<RateLimiter>,
     bot: Mutex<Option<BotHandle>>,
 }
 
 impl TelegramState {
     pub fn new(storage: Option<Arc<Storage>>) -> Self {
         Self {
-            inner: storage.map(|storage| Inner {
-                storage,
-                pairing: Arc::new(PairingState::new()),
-                bot: Mutex::new(None),
+            inner: storage.map(|storage| {
+                let clock: Arc<dyn Clock> = Arc::new(SystemClock);
+                Inner {
+                    attention: Arc::new(AttentionEngine::new(storage.clone(), clock)),
+                    rate_limiter: Arc::new(RateLimiter::with_defaults()),
+                    pairing: Arc::new(PairingState::new()),
+                    storage,
+                    bot: Mutex::new(None),
+                }
             }),
         }
     }
@@ -272,6 +281,8 @@ async fn restart_bot(inner: &Inner, token: Option<String>) {
     let ctx = BotContext {
         storage: inner.storage.clone(),
         pairing: inner.pairing.clone(),
+        attention: inner.attention.clone(),
+        rate_limiter: inner.rate_limiter.clone(),
     };
     let handle = bot::start_bot(token, ctx);
     let mut guard = inner.bot.lock().expect("telegram bot mutex poisoned");

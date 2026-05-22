@@ -1,6 +1,6 @@
 # Telegram Setup
 
-> Status: alpha. Pairing is implemented; read-only commands and `/mute` / `/stop` arrive in later alpha builds.
+> Status: alpha. Pairing and the read-only commands are implemented; `/mute` and `/stop` arrive in later alpha builds.
 
 Telegram is **off by default**. Until you complete the steps below, AgentDeck never contacts `api.telegram.org`.
 
@@ -47,15 +47,20 @@ All four actions write to the local audit log (see [`security.md`](security.md))
 
 ## Available commands
 
-The alpha pairing build only handles `PAIR <code>`. Once paired, every other message gets a stub reply (`Commands are not implemented yet`). The full command set lands in later alpha builds:
+Once paired, send any of the following to your bot. Replies are plain text — easy to read in any Telegram client.
 
-- `/help`
-- `/status`
-- `/agents`
-- `/attention`
-- `/session <id>`
-- `/mute <id>`
-- `/stop <id>` (with confirmation, per [`security.md`](security.md))
+- `/help` — list of commands
+- `/status` — headline counts (active sessions, attention items by severity, stalled, waiting)
+- `/agents` — active agent sessions with their 6-character short ids
+- `/attention` — open attention items, urgent first
+- `/session <id>` — detail for one session; `<id>` is the 6-char prefix shown in `/agents`. A shorter prefix works as long as it is unambiguous; you'll get a "matches N sessions" reply if not.
+
+Each user is rate-limited to **30 commands per minute** with a burst of **10**. Exceeding the limit returns a `Try again in Ns` reply and does not consume the failed command. Pairing (`PAIR <code>`) is **not** rate-limited.
+
+Coming in later alpha builds:
+
+- `/mute <id>` (build-plan step 19)
+- `/stop <id>` with confirmation, per [`security.md`](security.md) (build-plan step 20)
 
 ## Troubleshooting
 

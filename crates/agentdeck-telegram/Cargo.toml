@@ -7,6 +7,9 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
+agentdeck-adapter = { workspace = true }
+agentdeck-attention = { workspace = true }
+agentdeck-session = { workspace = true }
 agentdeck-storage = { workspace = true }
 chrono = { workspace = true }
 rand = "0.9"
