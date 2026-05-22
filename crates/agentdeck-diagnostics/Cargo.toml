@@ -1,0 +1,22 @@
+[package]
+name = "agentdeck-diagnostics"
+description = "Persists per-tick AdapterDiagnostic rows (one row per adapter) into agentdeck-storage and reads them back for the dashboard."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+agentdeck-adapter = { workspace = true }
+agentdeck-storage = { workspace = true }
+
+chrono = { workspace = true }
+rusqlite = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+agentdeck-process = { workspace = true }
+tempfile = "3.27"

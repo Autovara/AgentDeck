@@ -24,6 +24,7 @@ Workspace layout:
 - `crates/agentdeck-adapter-custom` — user-defined Level 1 process matcher (definitions, validation, persistence, runtime adapter)
 - `crates/agentdeck-session` — `SessionStateMachine` and `Session` / `SessionEvent` repository over `sessions` and `session_events`
 - `crates/agentdeck-attention` — rule-based attention engine over `attention_items`, plus `AttentionEngine::apply` / `set_mute` / `resolve`
+- `crates/agentdeck-diagnostics` — `record` / `list` over the `adapter_diagnostics` table; persists one row per `adapter_name` per tick (no history)
 - `src-tauri/` — Tauri application shell, tray detection, storage bootstrap, process scanner wiring, custom-adapter wiring, the monitor-tick orchestrator, and the Tauri commands consumed by the dashboard
 - `src/` — React 19 + TypeScript dashboard rendered inside the Tauri webview
 - `fixtures/sessions/` — recorded harness fixtures
@@ -141,13 +142,23 @@ The monitor-tick orchestrator lives in `src-tauri/src/monitor_tick.rs`. It runs 
 
 The Tauri commands behind the attention surface are `get_attention_report`, `mute_attention_item`, and `resolve_attention_item`.
 
+### Adapter diagnostics
+
+`crates/agentdeck-diagnostics` owns the `adapter_diagnostics` table. The schema (defined in `agentdeck-storage/migrations/0001_initial.sql`) holds at most one row per `adapter_name` — the §17 "keep only the most recent scan per adapter; do not accumulate history" discipline is enforced at the SQL level with `INSERT OR REPLACE` on the `adapter_name` primary key.
+
+`record(&Arc<Storage>, &[AdapterDiagnostic])` runs the whole batch in a single transaction. Adapters absent from the current batch are *not* deleted — their previously recorded row stays so the user can still see the most recent diagnostic for an adapter that did not run this tick. `list(&Arc<Storage>)` returns every row, ordered by `last_scan_time ASC` so stale adapters surface at the top of the dashboard card.
+
+The orchestrator (`src-tauri/src/monitor_tick.rs`) calls `record` immediately after `AdapterRegistry::scan_all` and before the session state machine apply. Persistence is **best-effort**: a failure is logged via `tracing::warn!` but the rest of the tick continues, because an empty diagnostics card is recoverable while a missed session update is not.
+
+The Tauri command behind the card is `get_adapter_diagnostics`; the React `AdapterDiagnosticsCard` renders one table row per adapter with an expandable per-row `<details>` block for data sources, missing permissions, failure reasons, and known limitations. The Diagnostics sidebar item carries a warning badge with the count of adapters that have non-empty `failure_reasons`.
+
 ### Dashboard pages
 
 The dashboard is split into three pages, navigable from the left sidebar:
 
 - **Overview** — four summary tiles (active agents, open attention by severity, stalled / waiting, estimated cost today) plus a five-item "recent attention" strip. The page is driven by one Tauri call, `get_overview_report`, which composes the snapshot from `agentdeck-session::list_active` and `AttentionEngine::list_open`. The "estimated cost today" tile shows `—` until cost tracking lands (build-plan §15 step 18).
 - **Attention** — the full open-items list, with severity (urgent / warn / info), reason (every enum value present in the current dataset), and "show muted" filter chips. Filtering is client-side over the same `get_attention_report` payload the Overview strip uses, so the lists never disagree.
-- **Diagnostics** — the existing tray-surface, storage, process-scanner, and custom-adapter cards. The adapter-diagnostics table itself is wired up in a later step.
+- **Diagnostics** — the existing tray-surface, storage, process-scanner, and custom-adapter cards, plus the **Adapter diagnostics** card driven by `get_adapter_diagnostics`.
 
 The "Refresh now" button in the sidebar footer drives `run_monitor_tick` and then refreshes Overview, Attention, and the process scanner in parallel. The button's last-tick timestamp gives users a rough sense of how stale the page is. A scheduled background tick lands in a later build step; until then every dashboard refresh is user-initiated.
 

@@ -3,6 +3,7 @@ import type { JSX } from "react";
 import {
   addCustomAdapter,
   deleteCustomAdapter,
+  getAdapterDiagnostics,
   getAttentionReport,
   getCustomAdapterReport,
   getOverviewReport,
@@ -15,6 +16,7 @@ import {
   setCustomAdapterEnabled,
 } from "./lib/tauri";
 import type {
+  AdapterDiagnosticsReport,
   AttentionReport,
   CustomAdapterReport,
   NewCustomAdapter,
@@ -58,6 +60,9 @@ export function App(): JSX.Element {
   const [overview, setOverview] = useState<AsyncState<OverviewReport>>({
     kind: "loading",
   });
+  const [adapterDiagnostics, setAdapterDiagnostics] = useState<
+    AsyncState<AdapterDiagnosticsReport>
+  >({ kind: "loading" });
   const [ticking, setTicking] = useState(false);
   const [lastTickAt, setLastTickAt] = useState<string | null>(null);
 
@@ -97,6 +102,15 @@ export function App(): JSX.Element {
       setOverview({ kind: "ready", report });
     } catch (err) {
       setOverview({ kind: "error", message: describeError(err) });
+    }
+  }, []);
+
+  const refreshAdapterDiagnostics = useCallback(async (): Promise<void> => {
+    try {
+      const report = await getAdapterDiagnostics();
+      setAdapterDiagnostics({ kind: "ready", report });
+    } catch (err) {
+      setAdapterDiagnostics({ kind: "error", message: describeError(err) });
     }
   }, []);
 
@@ -149,11 +163,17 @@ export function App(): JSX.Element {
         refreshOverview(),
         refreshAttention(),
         refreshScanner(),
+        refreshAdapterDiagnostics(),
       ]);
     } finally {
       setTicking(false);
     }
-  }, [refreshAttention, refreshOverview, refreshScanner]);
+  }, [
+    refreshAdapterDiagnostics,
+    refreshAttention,
+    refreshOverview,
+    refreshScanner,
+  ]);
 
   const handleMuteAttention = useCallback(
     async (id: string, hours: number): Promise<void> => {
@@ -215,10 +235,17 @@ export function App(): JSX.Element {
     void refreshCustom();
     void refreshAttention();
     void refreshOverview();
+    void refreshAdapterDiagnostics();
     return () => {
       cancelled = true;
     };
-  }, [refreshScanner, refreshCustom, refreshAttention, refreshOverview]);
+  }, [
+    refreshScanner,
+    refreshCustom,
+    refreshAttention,
+    refreshOverview,
+    refreshAdapterDiagnostics,
+  ]);
 
   const navItems: SidebarItem[] = [
     {
@@ -233,7 +260,7 @@ export function App(): JSX.Element {
     {
       id: "diagnostics",
       label: "Diagnostics",
-      ...diagnosticsNavBadge(storage, tray),
+      ...diagnosticsNavBadge(storage, tray, adapterDiagnostics),
     },
   ];
 
@@ -285,6 +312,7 @@ export function App(): JSX.Element {
             onRescan={() => {
               void refreshScanner();
             }}
+            adapterDiagnostics={adapterDiagnostics}
             custom={custom}
             customBusy={customBusy}
             onAddCustom={handleAddCustom}
@@ -316,6 +344,7 @@ function attentionNavBadge(
 function diagnosticsNavBadge(
   storage: AsyncState<StorageReport>,
   tray: AsyncState<TraySurfaceReport>,
+  adapters: AsyncState<AdapterDiagnosticsReport>,
 ): { badge?: string | null; badgeKind?: "warn" | "bad" | "ok" | "neutral" } {
   if (storage.kind === "ready" && !storage.report.ready) {
     return { badge: "!", badgeKind: "bad" };
@@ -326,6 +355,14 @@ function diagnosticsNavBadge(
     storage.report.error != null
   ) {
     return { badge: "!", badgeKind: "warn" };
+  }
+  if (adapters.kind === "ready" && adapters.report.ready) {
+    const failing = adapters.report.items.filter(
+      (i) => i.failureReasons.length > 0,
+    ).length;
+    if (failing > 0) {
+      return { badge: String(failing), badgeKind: "warn" };
+    }
   }
   if (tray.kind === "ready" && tray.report.fallbackRequired) {
     return { badge: "tray", badgeKind: "warn" };

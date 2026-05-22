@@ -1,9 +1,11 @@
 import type { JSX } from "react";
+import { AdapterDiagnosticsCard } from "../components/AdapterDiagnosticsCard";
 import { CustomAdaptersCard } from "../components/CustomAdaptersCard";
 import { ProcessScannerCard } from "../components/ProcessScannerCard";
 import { StorageCard } from "../components/StorageCard";
 import { TraySurfaceCard } from "../components/TraySurfaceCard";
 import type {
+  AdapterDiagnosticsReport,
   CustomAdapterReport,
   NewCustomAdapter,
   ProcessScannerReport,
@@ -22,6 +24,7 @@ type Props = {
   scanner: AsyncState<ProcessScannerReport>;
   rescanning: boolean;
   onRescan: () => void;
+  adapterDiagnostics: AsyncState<AdapterDiagnosticsReport>;
   custom: AsyncState<CustomAdapterReport>;
   customBusy: boolean;
   onAddCustom: (input: NewCustomAdapter) => Promise<void>;
@@ -35,6 +38,7 @@ export function DiagnosticsPage({
   scanner,
   rescanning,
   onRescan,
+  adapterDiagnostics,
   custom,
   customBusy,
   onAddCustom,
@@ -47,9 +51,9 @@ export function DiagnosticsPage({
         <div>
           <h1 className="page__title">Diagnostics</h1>
           <p className="page__subtitle">
-            Live state of the host environment, the local database, the
-            process scanner, and the user-defined custom adapters. The
-            adapter-diagnostics table itself lands in build-plan §15 step 9.
+            Live state of the host environment, the local database, every
+            registered adapter, the process scanner, and the user-defined
+            custom adapters.
           </p>
         </div>
       </header>
@@ -57,6 +61,7 @@ export function DiagnosticsPage({
       <div className="page__body">
         <TraySurfaceCard state={tray} />
         <StorageCard state={storage} />
+        <AdapterDiagnosticsCard state={adapterDiagnostics} />
         <ProcessScannerCard
           state={scanner}
           onRescan={onRescan}

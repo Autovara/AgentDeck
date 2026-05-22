@@ -21,10 +21,15 @@
 //!    registers it (we keep the registry per-tick rather than caching it
 //!    so toggling adapters on the dashboard takes effect immediately).
 //! 3. Runs every enabled adapter against the snapshot.
-//! 4. Calls [`SessionStateMachine::apply`] with the merged match set.
-//! 5. Reads the active session list back from storage and feeds the
+//! 4. Persists the per-adapter `AdapterDiagnostic` rows via
+//!    [`agentdeck_diagnostics::record`]. Persistence is best-effort: a
+//!    failure is logged but does not abort the tick, so the dashboard's
+//!    session and attention surfaces keep updating even if the
+//!    diagnostics table is wedged.
+//! 5. Calls [`SessionStateMachine::apply`] with the merged match set.
+//! 6. Reads the active session list back from storage and feeds the
 //!    [`TickReport`] + sessions into [`AttentionEngine::apply`].
-//! 6. Bundles the three reports into a [`MonitorTickReport`] for the
+//! 7. Bundles the reports into a [`MonitorTickReport`] for the
 //!    dashboard.
 
 use std::sync::Arc;
@@ -132,6 +137,13 @@ impl MonitorTickState {
 
         let scan_result = registry.scan_all(&snapshot);
         let adapter_matches = scan_result.matches.len();
+
+        // Best-effort persistence of diagnostics. A failure here must
+        // not block the rest of the tick: an empty diagnostics card is
+        // recoverable, but losing a session/attention update is not.
+        if let Err(err) = agentdeck_diagnostics::record(&inner.storage, &scan_result.diagnostics) {
+            tracing::warn!(error = %err, "failed to persist adapter diagnostics");
+        }
 
         let tick_report = match inner
             .state_machine

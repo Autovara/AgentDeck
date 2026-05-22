@@ -23,6 +23,7 @@ agentdeck-adapter = { workspace = true }
 agentdeck-adapter-custom = { workspace = true }
 agentdeck-attention = { workspace = true }
 agentdeck-core = { workspace = true }
+agentdeck-diagnostics = { workspace = true }
 agentdeck-process = { workspace = true }
 agentdeck-session = { workspace = true }
 agentdeck-storage = { workspace = true }

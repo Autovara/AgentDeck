@@ -12,6 +12,7 @@
 //! will own all state. This shell simply wires the UI surface to the core
 //! through Tauri commands and events.
 
+mod adapter_diagnostics;
 mod attention;
 mod custom_adapter;
 mod monitor_tick;
@@ -26,6 +27,7 @@ use tauri::Manager;
 use tray::{TraySurfaceReport, TraySurfaceState};
 use uuid::Uuid;
 
+use crate::adapter_diagnostics::AdapterDiagnosticsReport;
 use crate::attention::AttentionReport;
 use crate::custom_adapter::{CustomAdapterReport, CustomAdapterState};
 use crate::monitor_tick::{MonitorTickReport, MonitorTickState};
@@ -61,6 +63,7 @@ fn build_app() -> tauri::Builder<tauri::Wry> {
             mute_attention_item,
             resolve_attention_item,
             get_overview_report,
+            get_adapter_diagnostics,
         ])
         .setup(|app| {
             let handle = app.handle().clone();
@@ -212,6 +215,11 @@ fn resolve_attention_item(
 #[tauri::command]
 fn get_overview_report(state: tauri::State<'_, MonitorTickState>) -> OverviewReport {
     overview::snapshot(&state)
+}
+
+#[tauri::command]
+fn get_adapter_diagnostics(state: tauri::State<'_, MonitorTickState>) -> AdapterDiagnosticsReport {
+    adapter_diagnostics::snapshot(&state)
 }
 
 fn init_tracing() {

@@ -44,6 +44,7 @@ dependencies = [
  "agentdeck-adapter-custom",
  "agentdeck-attention",
  "agentdeck-core",
+ "agentdeck-diagnostics",
  "agentdeck-process",
  "agentdeck-session",
  "agentdeck-storage",
@@ -89,6 +90,22 @@ dependencies = [
  "chrono",
  "serde",
  "thiserror 1.0.69",
+]
+
+[[package]]
+name = "agentdeck-diagnostics"
+version = "0.0.0"
+dependencies = [
+ "agentdeck-adapter",
+ "agentdeck-process",
+ "agentdeck-storage",
+ "chrono",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 1.0.69",
+ "tracing",
 ]
 
 [[package]]

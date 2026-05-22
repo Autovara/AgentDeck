@@ -5,6 +5,7 @@ members = [
     "crates/agentdeck-adapter-custom",
     "crates/agentdeck-attention",
     "crates/agentdeck-core",
+    "crates/agentdeck-diagnostics",
     "crates/agentdeck-harness",
     "crates/agentdeck-process",
     "crates/agentdeck-session",
@@ -24,6 +25,7 @@ agentdeck-adapter = { path = "crates/agentdeck-adapter" }
 agentdeck-adapter-custom = { path = "crates/agentdeck-adapter-custom" }
 agentdeck-attention = { path = "crates/agentdeck-attention" }
 agentdeck-core = { path = "crates/agentdeck-core" }
+agentdeck-diagnostics = { path = "crates/agentdeck-diagnostics" }
 agentdeck-process = { path = "crates/agentdeck-process" }
 agentdeck-session = { path = "crates/agentdeck-session" }
 agentdeck-storage = { path = "crates/agentdeck-storage" }

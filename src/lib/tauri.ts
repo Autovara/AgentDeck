@@ -379,3 +379,41 @@ export interface OverviewReport {
 export async function getOverviewReport(): Promise<OverviewReport> {
   return invoke<OverviewReport>("get_overview_report");
 }
+
+/**
+ * Capability level enum from `agentdeck_adapter::CapabilityLevel`,
+ * serialised as snake_case strings.
+ */
+export type CapabilityLevel = "presence" | "status" | "usage" | "control";
+
+/** Confidence label from `agentdeck_adapter::Confidence`. */
+export type Confidence = "high" | "medium" | "low" | "unknown";
+
+/**
+ * Mirrors `agentdeck_adapter::AdapterDiagnostic`. One row per
+ * `adapter_name` in the `adapter_diagnostics` table.
+ */
+export interface AdapterDiagnostic {
+  adapterName: string;
+  enabled: boolean;
+  capabilityLevel: CapabilityLevel;
+  lastScanTime: string;
+  detectedCount: number;
+  dataSourcesUsed: string[];
+  missingPermissions: string[];
+  failureReasons: string[];
+  confidence: Confidence;
+  knownLimitations: string[];
+}
+
+/** Payload for the Diagnostics page's "Adapter diagnostics" card. */
+export interface AdapterDiagnosticsReport {
+  ready: boolean;
+  items: AdapterDiagnostic[];
+  capturedAt: string;
+  error: string | null;
+}
+
+export async function getAdapterDiagnostics(): Promise<AdapterDiagnosticsReport> {
+  return invoke<AdapterDiagnosticsReport>("get_adapter_diagnostics");
+}

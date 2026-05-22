@@ -636,3 +636,60 @@ a {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Adapter diagnostics card */
+
+.adapter-diag__detail {
+  padding: 0 8px 8px;
+}
+
+.adapter-diag__detail details > summary {
+  cursor: pointer;
+  color: var(--fg-muted);
+  font-family: var(--sans);
+  font-size: 12px;
+  padding: 4px 0;
+  user-select: none;
+}
+
+.adapter-diag__detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  padding-top: 6px;
+  font-family: var(--sans);
+}
+
+.adapter-diag__detail-list {
+  border-left: 2px solid var(--border);
+  padding: 4px 8px;
+}
+
+.adapter-diag__detail-list--warn {
+  border-left-color: var(--warn);
+}
+
+.adapter-diag__detail-list--bad {
+  border-left-color: #c42323;
+}
+
+.adapter-diag__detail-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--fg-muted);
+  margin-bottom: 4px;
+}
+
+.adapter-diag__detail-list ul {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 12px;
+}
+
+.adapter-diag__detail-empty {
+  font-size: 12px;
+  color: var(--fg-muted);
+  font-style: italic;
+}
