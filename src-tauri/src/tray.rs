@@ -26,9 +26,15 @@ use std::sync::Mutex;
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 use tauri::{
-    menu::{MenuBuilder, MenuItemBuilder},
+    menu::MenuEvent,
     tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent},
     AppHandle, Manager, Runtime,
+};
+
+use crate::alerts::AlertsPausedState;
+use crate::tray_menu::{
+    build_menu, parse_attention_id, TrayMenuSnapshot, MENU_ID_OPEN_DASHBOARD, MENU_ID_PAUSE_ALERTS,
+    MENU_ID_QUIT, MENU_ID_REFRESH,
 };
 
 /// Underlying mechanism the tray icon would use on the current host.
@@ -121,11 +127,17 @@ impl TraySurfaceState {
 
 /// Wrapper that keeps the [`TrayIcon`] alive for the duration of the app.
 /// Dropping the icon would remove it from the host tray on most platforms.
-pub struct TrayKeeper<R: Runtime>(#[allow(dead_code)] TrayIcon<R>);
+pub struct TrayKeeper<R: Runtime>(TrayIcon<R>);
 
 impl<R: Runtime> TrayKeeper<R> {
     pub fn new(icon: TrayIcon<R>) -> Self {
         Self(icon)
+    }
+
+    /// Borrow the underlying [`TrayIcon`]. Used by the tray scheduler
+    /// to swap the menu on every refresh.
+    pub fn icon(&self) -> &TrayIcon<R> {
+        &self.0
     }
 }
 
@@ -342,12 +354,15 @@ async fn probe_sni_watcher() -> bool {
 
 /// Build the tray icon for the current host. Caller is responsible for keeping
 /// the returned [`TrayIcon`] alive (see [`TrayKeeper`]).
-pub fn try_build_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<TrayIcon<R>> {
-    let open_dashboard = MenuItemBuilder::with_id("open_dashboard", "Open Dashboard").build(app)?;
-    let quit = MenuItemBuilder::with_id("quit", "Quit AgentDeck").build(app)?;
-    let menu = MenuBuilder::new(app)
-        .items(&[&open_dashboard, &quit])
-        .build()?;
+///
+/// `initial_snapshot` populates the menu on first paint. The tray scheduler
+/// rebuilds the menu from a fresh snapshot on every tick (see
+/// [`set_menu_from_snapshot`]).
+pub fn try_build_tray<R: Runtime>(
+    app: &AppHandle<R>,
+    initial_snapshot: &TrayMenuSnapshot,
+) -> tauri::Result<TrayIcon<R>> {
+    let menu = build_menu(app, initial_snapshot)?;
 
     let icon = app
         .default_window_icon()
@@ -359,13 +374,7 @@ pub fn try_build_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<TrayIcon<
         .tooltip("AgentDeck (alpha)")
         .menu(&menu)
         .show_menu_on_left_click(false)
-        .on_menu_event(|app, event| match event.id.as_ref() {
-            "open_dashboard" => focus_dashboard(app),
-            "quit" => app.exit(0),
-            other => {
-                tracing::debug!(menu_id = other, "Unhandled tray menu event");
-            }
-        })
+        .on_menu_event(handle_menu_event)
         .on_tray_icon_event(|tray, event| {
             if let TrayIconEvent::Click {
                 button: MouseButton::Left,
@@ -377,6 +386,66 @@ pub fn try_build_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<TrayIcon<
             }
         })
         .build(app)
+}
+
+/// Replace the tray icon's menu with one built from `snapshot`.
+pub fn set_menu_from_snapshot<R: Runtime>(
+    app: &AppHandle<R>,
+    icon: &TrayIcon<R>,
+    snapshot: &TrayMenuSnapshot,
+) -> tauri::Result<()> {
+    let menu = build_menu(app, snapshot)?;
+    icon.set_menu(Some(menu))?;
+    Ok(())
+}
+
+fn handle_menu_event<R: Runtime>(app: &AppHandle<R>, event: MenuEvent) {
+    let id = event.id.as_ref();
+    match id {
+        MENU_ID_OPEN_DASHBOARD => focus_dashboard(app),
+        MENU_ID_REFRESH => spawn_refresh(app),
+        MENU_ID_PAUSE_ALERTS => spawn_toggle_alerts(app),
+        MENU_ID_QUIT => app.exit(0),
+        other if other.starts_with(crate::tray_menu::ATTENTION_PREFIX) => {
+            if parse_attention_id(other).is_some() {
+                // Per build-plan §13 the alpha tray hands the user to
+                // the dashboard for any per-item action. The dashboard
+                // already opens on the Overview page, which surfaces
+                // the same attention list.
+                focus_dashboard(app);
+            } else {
+                tracing::debug!(menu_id = other, "Malformed attention menu id");
+            }
+        }
+        other => {
+            tracing::debug!(menu_id = other, "Unhandled tray menu event");
+        }
+    }
+}
+
+/// Spawn a one-shot tick + tray refresh in response to the "Refresh"
+/// menu item. Same code path the scheduler uses, so concurrent ticks
+/// serialise safely on the storage mutex.
+fn spawn_refresh<R: Runtime>(app: &AppHandle<R>) {
+    let handle = app.clone();
+    tauri::async_runtime::spawn(async move {
+        crate::tray_scheduler::run_once(&handle).await;
+    });
+}
+
+/// Flip [`AlertsPausedState`] and rebuild the tray menu so the label
+/// updates immediately. Does *not* run a monitor tick — pausing alerts
+/// is independent of the data refresh.
+fn spawn_toggle_alerts<R: Runtime>(app: &AppHandle<R>) {
+    let handle = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let paused = match handle.try_state::<AlertsPausedState>() {
+            Some(s) => s.toggle(),
+            None => return,
+        };
+        tracing::info!(paused, "tray: alerts toggled");
+        crate::tray_scheduler::rebuild_menu_only(&handle).await;
+    });
 }
 
 fn focus_dashboard<R: Runtime>(app: &AppHandle<R>) {

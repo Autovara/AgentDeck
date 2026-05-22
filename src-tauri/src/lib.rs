@@ -13,13 +13,17 @@
 //! through Tauri commands and events.
 
 mod adapter_diagnostics;
+mod alerts;
 mod attention;
 mod custom_adapter;
 mod monitor_tick;
+mod notifications;
 mod overview;
 mod process_scanner;
 mod storage;
 mod tray;
+mod tray_menu;
+mod tray_scheduler;
 
 use agentdeck_adapter_custom::NewCustomAdapter;
 use agentdeck_attention::AttentionItem;
@@ -28,12 +32,14 @@ use tray::{TraySurfaceReport, TraySurfaceState};
 use uuid::Uuid;
 
 use crate::adapter_diagnostics::AdapterDiagnosticsReport;
+use crate::alerts::AlertsPausedState;
 use crate::attention::AttentionReport;
 use crate::custom_adapter::{CustomAdapterReport, CustomAdapterState};
 use crate::monitor_tick::{MonitorTickReport, MonitorTickState};
 use crate::overview::OverviewReport;
 use crate::process_scanner::{ProcessScannerReport, ProcessScannerState};
 use crate::storage::{StorageReport, StorageReportState};
+use crate::tray_menu::TrayMenuSnapshot;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -75,6 +81,7 @@ fn build_app() -> tauri::Builder<tauri::Wry> {
             app.manage(ProcessScannerState::new());
             app.manage(CustomAdapterState::new(storage_handle.clone()));
             app.manage(MonitorTickState::new(storage_handle));
+            app.manage(AlertsPausedState::new());
 
             let report = tray::probe(&handle);
 
@@ -85,7 +92,10 @@ fn build_app() -> tauri::Builder<tauri::Wry> {
                 "Tray surface probe complete",
             );
 
-            let final_report = match (report.available, tray::try_build_tray(&handle)) {
+            // Tray menu starts empty; the scheduler's first immediate
+            // tick populates it within a few hundred ms.
+            let initial_snapshot = TrayMenuSnapshot::unavailable(false);
+            let final_report = match (report.available, tray::try_build_tray(&handle, &initial_snapshot)) {
                 (true, Ok(icon)) => {
                     app.manage(tray::TrayKeeper::new(icon));
                     report
@@ -108,6 +118,13 @@ fn build_app() -> tauri::Builder<tauri::Wry> {
             }
 
             app.manage(TraySurfaceState::new(final_report));
+
+            // Run the scheduler regardless of tray availability:
+            // desktop notifications are still useful on hosts where
+            // the tray fell back. Spawn after every other state is
+            // managed so the first tick sees a complete app.
+            tray_scheduler::spawn(handle.clone());
+
             Ok(())
         })
 }
