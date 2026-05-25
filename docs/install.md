@@ -29,17 +29,17 @@ pnpm install --frozen-lockfile
 pnpm tauri build
 ```
 
-The two output artifacts land in `src-tauri/target/release/bundle/`:
+The two output artifacts land in `target/release/bundle/` (the Cargo workspace root, not under `src-tauri/`):
 
-- `deb/agentdeck_0.1.0-alpha.1_amd64.deb` — Debian / Ubuntu package
-- `appimage/agentdeck_0.1.0-alpha.1_amd64.AppImage` — portable single-file binary
+- `deb/AgentDeck_0.1.0-alpha.1_amd64.deb` — Debian / Ubuntu package
+- `appimage/AgentDeck_0.1.0-alpha.1_amd64.AppImage` — portable single-file binary
 
 The release-mode build is configured with `lto = "thin"`, `codegen-units = 1`, and `strip = true`, so the bundles are small (~12 MB AppImage on a typical Linux box; varies with WebKit version).
 
 ## Installing from `.deb`
 
 ```sh
-sudo apt install ./agentdeck_0.1.0-alpha.1_amd64.deb
+sudo apt install ./AgentDeck_0.1.0-alpha.1_amd64.deb
 ```
 
 The `.deb` declares the following runtime dependencies; `apt` resolves them automatically:
@@ -51,17 +51,17 @@ The `.deb` declares the following runtime dependencies; `apt` resolves them auto
 After installation:
 
 - Launch from your application menu (it appears under "Development" — set by `category: DeveloperTool`).
-- Or run `agentdeck` from a terminal.
+- Or run `agentdeck-app` from a terminal (the binary uses Tauri's default `-app` suffix in the alpha).
 
-Uninstall: `sudo apt remove agentdeck`.
+Uninstall: `sudo apt remove agent-deck` (the Debian package name uses a hyphen, per Debian naming convention).
 
 ## Installing from `.AppImage`
 
 The AppImage is a self-contained binary — handy when you don't want to add a package, or when your distro is not Debian-family.
 
 ```sh
-chmod +x agentdeck_0.1.0-alpha.1_amd64.AppImage
-./agentdeck_0.1.0-alpha.1_amd64.AppImage
+chmod +x AgentDeck_0.1.0-alpha.1_amd64.AppImage
+./AgentDeck_0.1.0-alpha.1_amd64.AppImage
 ```
 
 You may see a prompt the first time you run it asking whether to integrate it with your desktop environment — that's the AppImage launcher, not AgentDeck. Either choice is fine.

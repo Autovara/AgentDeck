@@ -26,11 +26,11 @@ End users: see [`docs/install.md`](docs/install.md) for the full prerequisites a
 
 ```sh
 # Debian / Ubuntu
-sudo apt install ./agentdeck_0.1.0-alpha.1_amd64.deb
+sudo apt install ./AgentDeck_0.1.0-alpha.1_amd64.deb
 
 # Anywhere else on Linux
-chmod +x ./agentdeck_0.1.0-alpha.1_amd64.AppImage
-./agentdeck_0.1.0-alpha.1_amd64.AppImage
+chmod +x ./AgentDeck_0.1.0-alpha.1_amd64.AppImage
+./AgentDeck_0.1.0-alpha.1_amd64.AppImage
 ```
 
 On first launch AgentDeck creates `~/.local/share/agentdeck/agentdeck.db`. Delete that file to reset.
@@ -49,7 +49,7 @@ npm i -g pnpm@11
 
 pnpm install --frozen-lockfile
 pnpm tauri:dev      # dev loop with hot reload
-pnpm tauri:build    # produces .deb + .AppImage in src-tauri/target/release/bundle/
+pnpm tauri:build    # produces .deb + .AppImage in target/release/bundle/
 ```
 
 CI runs the same gates: `cargo build / clippy -D warnings / test --workspace --locked` plus `pnpm typecheck` on every push. See [`docs/contributing.md`](docs/contributing.md) for the workspace layout and conventions.
@@ -76,7 +76,7 @@ Open a GitHub issue. Useful information to include:
 - The AgentDeck version, visible in the app menu.
 - Distro and desktop environment (`lsb_release -a`, `echo "$XDG_CURRENT_DESKTOP / $XDG_SESSION_TYPE"`).
 - A screenshot of the Diagnostics page if the bug is detection-related.
-- The output of `AGENTDECK_LOG=debug agentdeck` for crashes or unexpected behaviour.
+- The output of `AGENTDECK_LOG=debug agentdeck-app` for crashes or unexpected behaviour.
 
 If you've paired Telegram, do not attach `~/.local/share/agentdeck/agentdeck.db` — your bot token is in plaintext there.
 

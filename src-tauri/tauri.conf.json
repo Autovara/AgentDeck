@@ -38,7 +38,7 @@
     "category": "DeveloperTool",
     "shortDescription": "Local attention board for AI coding agents.",
     "longDescription": "AgentDeck is a local-first dashboard, tray app, and Telegram bot that tracks running AI coding agents (Claude Code, Codex CLI, Aider), surfaces sessions that need a human, and lets you safely stop or mute them remotely. Pre-alpha software; lead validation platform is Linux. macOS and Windows builds arrive at beta.",
-    "homepage": "https://github.com/anthropics/agentdeck",
+    "homepage": "https://github.com/Autovara/AgentDeck",
     "publisher": "AgentDeck contributors",
     "copyright": "Copyright (c) AgentDeck contributors",
     "icon": [
