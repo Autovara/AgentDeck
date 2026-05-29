@@ -9,7 +9,7 @@ This guide covers the dev loop, the workspace shape, and the conventions to foll
 ### Prerequisites
 
 - Rust **stable** (install via [rustup](https://rustup.rs)).
-- Node.js **20+** and **pnpm 11** (`packageManager` is pinned in `package.json`).
+- Node.js **22.13+** and **pnpm 11** (`packageManager` is pinned in `package.json`; pnpm 11 requires Node 22.13 or newer).
 - A C linker:
   - **Linux:** `sudo apt install build-essential` (or distro equivalent)
   - **macOS:** `xcode-select --install`
