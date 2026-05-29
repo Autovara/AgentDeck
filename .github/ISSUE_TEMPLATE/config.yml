@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Install guide
+    url: https://github.com/Autovara/AgentDeck/blob/main/docs/install.md
+    about: Prerequisites, .deb vs .AppImage, and first-run notes before you file a bug.
+  - name: Telegram setup
+    url: https://github.com/Autovara/AgentDeck/blob/main/docs/telegram-setup.md
+    about: Pairing, allowlist, and the commands the bot understands.
